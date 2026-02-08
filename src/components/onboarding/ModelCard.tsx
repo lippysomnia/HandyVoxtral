@@ -153,6 +153,17 @@ const ModelCard: React.FC<ModelCardProps> = ({
                 {t("modelSelector.switching")}
               </Badge>
             )}
+            {model.is_cloud && (
+              <Badge variant="secondary" className="!bg-blue-500/20 !text-blue-400">
+                <Cloud className="w-3 h-3 mr-1" />
+                {t("modelSelector.cloud")}
+              </Badge>
+            )}
+            {model.is_realtime && (
+              <Badge variant="secondary" className="!bg-emerald-500/20 !text-emerald-400">
+                {t("modelSelector.realtime")}
+              </Badge>
+            )}
           </div>
           <p className="text-text/60 text-sm leading-relaxed">
             {displayDescription}
@@ -201,12 +212,6 @@ const ModelCard: React.FC<ModelCardProps> = ({
           <Globe className="w-3.5 h-3.5" />
           <span>{getLanguageDisplayText(model.supported_languages, t)}</span>
         </div>
-        {model.is_cloud && (
-          <div className="flex items-center gap-1 text-xs text-blue-400">
-            <Cloud className="w-3.5 h-3.5" />
-            <span>{t("modelSelector.cloud")}</span>
-          </div>
-        )}
         {model.supports_translation && (
           <div
             className="flex items-center gap-1 text-xs text-text/50"

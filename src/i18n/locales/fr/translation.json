@@ -101,6 +101,7 @@
     "noModelDownloadRequired": "Aucun Modèle - Téléchargement Requis",
     "deleteModel": "Supprimer {{modelName}}",
     "cloud": "Cloud",
+    "realtime": "Temps réel",
     "downloadSpeed": "{{speed}} Mo/s",
     "capabilities": {
       "languageSelection": "Prend en charge plusieurs langues d'entrée",

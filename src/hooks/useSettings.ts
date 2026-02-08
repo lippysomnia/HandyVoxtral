@@ -57,9 +57,9 @@ export const useSettings = (): UseSettingsReturn => {
   }, [store.initialize, store.isLoading]);
 
   const currentModelInfo = models.find((m) => m.id === currentModel);
-  const isVoxtral = currentModelInfo?.engine_type === "Voxtral";
+  const isRealtime = currentModelInfo?.is_realtime ?? false;
   const isDirect = store.settings?.paste_method === "direct";
-  const isRealtimeMode = isVoxtral && isDirect;
+  const isRealtimeMode = isRealtime && isDirect;
 
   return {
     settings: store.settings,

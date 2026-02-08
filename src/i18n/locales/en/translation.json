@@ -101,6 +101,7 @@
     "noModelDownloadRequired": "No Model - Download Required",
     "deleteModel": "Delete {{modelName}}",
     "cloud": "Cloud",
+    "realtime": "Realtime",
     "downloadSpeed": "{{speed}} MB/s",
     "cancel": "Cancel",
     "cancelDownload": "Cancel download",

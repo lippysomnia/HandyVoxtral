@@ -44,6 +44,8 @@ pub struct ModelInfo {
     pub supported_languages: Vec<String>, // Languages this model can transcribe
     #[serde(default)]
     pub is_cloud: bool,
+    #[serde(default)]
+    pub is_realtime: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -114,6 +116,7 @@ impl ModelManager {
                 is_recommended: false,
                 supported_languages: whisper_languages.clone(),
                 is_cloud: false,
+                is_realtime: false,
             },
         );
 
@@ -138,6 +141,7 @@ impl ModelManager {
                 is_recommended: false,
                 supported_languages: whisper_languages.clone(),
                 is_cloud: false,
+                is_realtime: false,
             },
         );
 
@@ -161,6 +165,7 @@ impl ModelManager {
                 is_recommended: false,
                 supported_languages: whisper_languages.clone(),
                 is_cloud: false,
+                is_realtime: false,
             },
         );
 
@@ -184,6 +189,7 @@ impl ModelManager {
                 is_recommended: false,
                 supported_languages: whisper_languages.clone(),
                 is_cloud: false,
+                is_realtime: false,
             },
         );
 
@@ -208,6 +214,7 @@ impl ModelManager {
                 is_recommended: false,
                 supported_languages: whisper_languages,
                 is_cloud: false,
+                is_realtime: false,
             },
         );
 
@@ -232,6 +239,7 @@ impl ModelManager {
                 is_recommended: false,
                 supported_languages: vec!["en".to_string()],
                 is_cloud: false,
+                is_realtime: false,
             },
         );
 
@@ -265,6 +273,7 @@ impl ModelManager {
                 is_recommended: true,
                 supported_languages: parakeet_v3_languages,
                 is_cloud: false,
+                is_realtime: false,
             },
         );
 
@@ -288,6 +297,7 @@ impl ModelManager {
                 is_recommended: false,
                 supported_languages: vec!["en".to_string()],
                 is_cloud: false,
+                is_realtime: false,
             },
         );
 
@@ -313,6 +323,7 @@ impl ModelManager {
                 is_recommended: false,
                 supported_languages: Vec::new(),
                 is_cloud: true,
+                is_realtime: true,
             },
         );
 

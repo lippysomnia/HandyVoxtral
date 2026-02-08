@@ -55,15 +55,24 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
                     {getTranslatedModelDescription(model, t)}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {model.is_cloud && (
-                    <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
-                      {t("modelSelector.cloud")}
-                    </span>
-                  )}
+                <div className="flex flex-col items-end gap-0.5">
                   {currentModelId === model.id && (
                     <div className="text-xs text-logo-primary">
                       {t("modelSelector.active")}
+                    </div>
+                  )}
+                  {(model.is_cloud || model.is_realtime) && (
+                    <div className="flex items-center gap-1">
+                      {model.is_cloud && (
+                        <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
+                          {t("modelSelector.cloud")}
+                        </span>
+                      )}
+                      {model.is_realtime && (
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">
+                          {t("modelSelector.realtime")}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>

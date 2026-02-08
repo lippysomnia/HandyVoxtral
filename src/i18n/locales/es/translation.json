@@ -101,6 +101,7 @@
     "noModelDownloadRequired": "Sin Modelo - Descarga Requerida",
     "deleteModel": "Eliminar {{modelName}}",
     "cloud": "Nube",
+    "realtime": "Tiempo real",
     "downloadSpeed": "{{speed}} MB/s",
     "capabilities": {
       "languageSelection": "Soporta múltiples idiomas de entrada",

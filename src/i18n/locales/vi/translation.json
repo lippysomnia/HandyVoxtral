@@ -101,6 +101,7 @@
     "noModelDownloadRequired": "Chưa Có Mô Hình - Cần Tải Xuống",
     "deleteModel": "Xóa {{modelName}}",
     "cloud": "Đám mây",
+    "realtime": "Thời gian thực",
     "downloadSpeed": "{{speed}} MB/s",
     "capabilities": {
       "languageSelection": "Hỗ trợ nhiều ngôn ngữ đầu vào",
