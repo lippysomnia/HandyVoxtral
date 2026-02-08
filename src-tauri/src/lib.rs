@@ -134,6 +134,11 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(history_manager.clone());
 
+    // Pre-load the selected model in the background so it's ready when the user
+    // presses the hotkey. For cloud models (Voxtral) this validates the API key
+    // and sets the model as loaded immediately.
+    transcription_manager.initiate_model_load();
+
     // Note: Shortcuts are NOT initialized here.
     // The frontend is responsible for calling the `initialize_shortcuts` command
     // after permissions are confirmed (on macOS) or after onboarding completes.
