@@ -22,6 +22,7 @@ pub enum EngineType {
     Parakeet,
     Moonshine,
     Voxtral,
+    OpenRouter,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -324,6 +325,32 @@ impl ModelManager {
                 supported_languages: Vec::new(),
                 is_cloud: true,
                 is_realtime: true,
+            },
+        );
+
+        available_models.insert(
+            "openrouter".to_string(),
+            ModelInfo {
+                id: "openrouter".to_string(),
+                name: "OpenRouter".to_string(),
+                description:
+                    "Cloud-based transcription via OpenRouter (e.g. google/gemini-3-flash-preview)."
+                        .to_string(),
+                filename: String::new(),
+                url: None,
+                size_mb: 0,
+                is_downloaded: true,
+                is_downloading: false,
+                partial_size: 0,
+                is_directory: false,
+                engine_type: EngineType::OpenRouter,
+                accuracy_score: 0.90,
+                speed_score: 0.85,
+                supports_translation: false,
+                is_recommended: false,
+                supported_languages: Vec::new(),
+                is_cloud: true,
+                is_realtime: false,
             },
         );
 

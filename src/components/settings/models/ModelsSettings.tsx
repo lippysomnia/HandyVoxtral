@@ -8,6 +8,7 @@ import { useModelStore } from "@/stores/modelStore";
 import { LANGUAGES } from "@/lib/constants/languages.ts";
 import type { ModelInfo } from "@/bindings";
 import { MistralApiKey } from "../MistralApiKey";
+import { OpenRouterConfig } from "../OpenRouterConfig";
 
 // check if model supports a language based on its supported_languages list
 const modelSupportsLanguage = (model: ModelInfo, langCode: string): boolean => {
@@ -189,7 +190,11 @@ export const ModelsSettings: React.FC = () => {
       return 0;
     });
 
-    return { cloudModels: cloud, downloadedModels: downloaded, availableModels: available };
+    return {
+      cloudModels: cloud,
+      downloadedModels: downloaded,
+      availableModels: available,
+    };
   }, [filteredModels, downloadingModels, extractingModels, currentModel]);
 
   if (loading) {
@@ -232,7 +237,8 @@ export const ModelsSettings: React.FC = () => {
                   downloadSpeed={getDownloadSpeed(model.id)}
                   showRecommended={false}
                 >
-                  <MistralApiKey />
+                  {model.engine_type === "Voxtral" && <MistralApiKey />}
+                  {model.engine_type === "OpenRouter" && <OpenRouterConfig />}
                 </ModelCard>
               ))}
             </div>

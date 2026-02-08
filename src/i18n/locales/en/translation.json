@@ -57,6 +57,10 @@
       "voxtral-mini-realtime": {
         "name": "Voxtral Mini Realtime",
         "description": "Cloud-based with real-time writing. Fast and accurate, requires Mistral API key."
+      },
+      "openrouter": {
+        "name": "OpenRouter",
+        "description": "Cloud-based transcription via OpenRouter (e.g. google/gemini-3-flash-preview)."
       }
     },
     "errors": {
@@ -166,6 +170,16 @@
         "title": "Mistral API Key",
         "description": "Required for Voxtral cloud transcription. Get one at console.mistral.ai",
         "placeholder": "Enter your Mistral API key..."
+      },
+      "openrouterApiKey": {
+        "title": "OpenRouter API Key",
+        "description": "Required for OpenRouter cloud transcription. Get one at openrouter.ai/keys",
+        "placeholder": "Enter your OpenRouter API key..."
+      },
+      "openrouterModel": {
+        "title": "Model",
+        "description": "The model to use for transcription (e.g. google/gemini-3-flash-preview)",
+        "placeholder": "e.g. google/gemini-3-flash-preview"
       }
     },
     "models": {

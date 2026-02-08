@@ -1,5 +1,6 @@
 use crate::audio_toolkit::{apply_custom_words, filter_transcription_output};
 use crate::managers::model::{EngineType, ModelManager};
+use crate::managers::openrouter::OpenRouterEngine;
 use crate::managers::voxtral::VoxtralEngine;
 use crate::settings::{get_settings, ModelUnloadTimeout};
 use anyhow::Result;
@@ -34,6 +35,7 @@ enum LoadedEngine {
     Parakeet(ParakeetEngine),
     Moonshine(MoonshineEngine),
     Voxtral(VoxtralEngine),
+    OpenRouter,
 }
 
 #[derive(Clone)]
@@ -148,6 +150,7 @@ impl TranscriptionManager {
                     LoadedEngine::Parakeet(ref mut e) => e.unload_model(),
                     LoadedEngine::Moonshine(ref mut e) => e.unload_model(),
                     LoadedEngine::Voxtral(_) => {} // No-op: cloud engine has nothing to unload
+                    LoadedEngine::OpenRouter => {} // No-op: cloud engine has nothing to unload
                 }
             }
             *engine = None; // Drop the engine to free memory
@@ -185,7 +188,10 @@ impl TranscriptionManager {
             // Skip unloading for cloud engines - nothing to free
             {
                 let engine_guard = self.engine.lock().unwrap();
-                if let Some(LoadedEngine::Voxtral(_)) = engine_guard.as_ref() {
+                if matches!(
+                    engine_guard.as_ref(),
+                    Some(LoadedEngine::Voxtral(_)) | Some(LoadedEngine::OpenRouter)
+                ) {
                     return;
                 }
             }
@@ -249,6 +255,12 @@ impl TranscriptionManager {
                         return Err(anyhow::anyhow!(error_msg));
                     }
                     LoadedEngine::Voxtral(VoxtralEngine::new(settings.mistral_api_key.clone()))
+                }
+                EngineType::OpenRouter => {
+                    // Nothing to initialize — credentials are read fresh from
+                    // settings at transcription time so user changes are always
+                    // picked up without needing to reload the model.
+                    LoadedEngine::OpenRouter
                 }
                 _ => return Err(anyhow::anyhow!("Unknown cloud engine type")),
             };
@@ -349,6 +361,10 @@ impl TranscriptionManager {
                 // Cloud engines are handled above and return early
                 unreachable!("Voxtral cloud engine should be handled before this point")
             }
+            EngineType::OpenRouter => {
+                // Cloud engines are handled above and return early
+                unreachable!("OpenRouter cloud engine should be handled before this point")
+            }
         };
 
         // Update the current engine and model ID
@@ -443,44 +459,76 @@ impl TranscriptionManager {
         // Get current settings for configuration
         let settings = get_settings(&self.app_handle);
 
-        // Check if this is a Voxtral cloud engine — handle outside the mutex
-        let is_voxtral = {
+        // Check if this is a cloud engine — handle outside the mutex
+        let cloud_engine_type = {
             let engine_guard = self.engine.lock().unwrap();
-            matches!(engine_guard.as_ref(), Some(LoadedEngine::Voxtral(_)))
+            match engine_guard.as_ref() {
+                Some(LoadedEngine::Voxtral(_)) => Some("voxtral"),
+                Some(LoadedEngine::OpenRouter) => Some("openrouter"),
+                _ => None,
+            }
         };
 
-        if is_voxtral {
-            // For cloud engines, get the API key and run async transcription outside the lock
-            let api_key = {
-                let engine_guard = self.engine.lock().unwrap();
-                match engine_guard.as_ref() {
-                    Some(LoadedEngine::Voxtral(v)) => v.api_key().to_string(),
-                    _ => return Err(anyhow::anyhow!("Expected Voxtral engine")),
-                }
-            };
+        if let Some(cloud_type) = cloud_engine_type {
+            let cloud_text = match cloud_type {
+                "voxtral" => {
+                    let api_key = {
+                        let engine_guard = self.engine.lock().unwrap();
+                        match engine_guard.as_ref() {
+                            Some(LoadedEngine::Voxtral(v)) => v.api_key().to_string(),
+                            _ => return Err(anyhow::anyhow!("Expected Voxtral engine")),
+                        }
+                    };
 
-            let voxtral = VoxtralEngine::new(api_key);
-            let handle = tokio::runtime::Handle::current();
-            let voxtral_text = std::thread::spawn(move || handle.block_on(voxtral.transcribe(audio)))
-                .join()
-                .map_err(|_| anyhow::anyhow!("Voxtral transcription thread panicked"))?
-                .map_err(|e| anyhow::anyhow!("Voxtral transcription failed: {}", e))?;
+                    let voxtral = VoxtralEngine::new(api_key);
+                    let handle = tokio::runtime::Handle::current();
+                    std::thread::spawn(move || handle.block_on(voxtral.transcribe(audio)))
+                        .join()
+                        .map_err(|_| anyhow::anyhow!("Voxtral transcription thread panicked"))?
+                        .map_err(|e| anyhow::anyhow!("Voxtral transcription failed: {}", e))?
+                }
+                "openrouter" => {
+                    // Read settings fresh so user changes are always picked up
+                    let api_key = settings.openrouter_api_key.clone();
+                    let model = settings.openrouter_model.clone();
+
+                    if api_key.trim().is_empty() {
+                        return Err(anyhow::anyhow!(
+                            "OpenRouter API key is required. Set it in the Models tab."
+                        ));
+                    }
+                    if model.trim().is_empty() {
+                        return Err(anyhow::anyhow!(
+                            "OpenRouter model name is required. Set it in the Models tab."
+                        ));
+                    }
+
+                    let openrouter = OpenRouterEngine::new(api_key, model);
+                    let handle = tokio::runtime::Handle::current();
+                    std::thread::spawn(move || handle.block_on(openrouter.transcribe(audio)))
+                        .join()
+                        .map_err(|_| anyhow::anyhow!("OpenRouter transcription thread panicked"))?
+                        .map_err(|e| anyhow::anyhow!("OpenRouter transcription failed: {}", e))?
+                }
+                _ => return Err(anyhow::anyhow!("Unknown cloud engine type")),
+            };
 
             let corrected_result = if !settings.custom_words.is_empty() {
                 apply_custom_words(
-                    &voxtral_text,
+                    &cloud_text,
                     &settings.custom_words,
                     settings.word_correction_threshold,
                 )
             } else {
-                voxtral_text
+                cloud_text
             };
 
             let filtered_result = filter_transcription_output(&corrected_result);
 
             let et = std::time::Instant::now();
             info!(
-                "Voxtral transcription completed in {}ms",
+                "{} transcription completed in {}ms",
+                cloud_type,
                 (et - st).as_millis()
             );
 
@@ -543,6 +591,9 @@ impl TranscriptionManager {
                     .map_err(|e| anyhow::anyhow!("Moonshine transcription failed: {}", e))?,
                 LoadedEngine::Voxtral(_) => {
                     unreachable!("Voxtral is handled above")
+                }
+                LoadedEngine::OpenRouter => {
+                    unreachable!("OpenRouter is handled above")
                 }
             }
         };

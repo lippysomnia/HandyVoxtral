@@ -129,6 +129,10 @@ const settingUpdaters: {
     commands.changeExperimentalEnabledSetting(value as boolean),
   mistral_api_key: (value) =>
     commands.changeMistralApiKeySetting(value as string),
+  openrouter_api_key: (value) =>
+    commands.changeOpenrouterApiKeySetting(value as string),
+  openrouter_model: (value) =>
+    commands.changeOpenrouterModelSetting(value as string),
 };
 
 export const useSettingsStore = create<SettingsStore>()(

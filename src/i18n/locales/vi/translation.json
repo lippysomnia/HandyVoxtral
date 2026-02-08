@@ -57,6 +57,10 @@
       "voxtral-mini-realtime": {
         "name": "Voxtral Mini Realtime",
         "description": "Dựa trên đám mây với viết theo thời gian thực. Nhanh và chính xác, cần khóa API Mistral."
+      },
+      "openrouter": {
+        "name": "OpenRouter",
+        "description": "Chuyển đổi giọng nói đám mây qua OpenRouter (vd. google/gemini-3-flash-preview)."
       }
     },
     "errors": {
@@ -185,6 +189,16 @@
         "title": "Khóa API Mistral",
         "description": "Cần thiết cho chuyển đổi đám mây Voxtral. Lấy tại console.mistral.ai",
         "placeholder": "Nhập khóa API Mistral của bạn..."
+      },
+      "openrouterApiKey": {
+        "title": "Khóa API OpenRouter",
+        "description": "Cần thiết cho chuyển đổi đám mây OpenRouter. Lấy tại openrouter.ai/keys",
+        "placeholder": "Nhập khóa API OpenRouter của bạn..."
+      },
+      "openrouterModel": {
+        "title": "Mô hình",
+        "description": "Mô hình sử dụng cho chuyển đổi (vd. google/gemini-3-flash-preview)",
+        "placeholder": "vd. google/gemini-3-flash-preview"
       }
     },
     "sound": {
