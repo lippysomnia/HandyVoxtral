@@ -1,12 +1,14 @@
-import React from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Check,
+  ChevronDown,
   Cloud,
   Download,
   Globe,
   Languages,
   Loader2,
+  Settings,
   Trash2,
 } from "lucide-react";
 import type { ModelInfo } from "@/bindings";
@@ -54,6 +56,7 @@ interface ModelCardProps {
   downloadProgress?: number;
   downloadSpeed?: number; // MB/s
   showRecommended?: boolean;
+  children?: React.ReactNode;
 }
 
 const ModelCard: React.FC<ModelCardProps> = ({
@@ -69,8 +72,10 @@ const ModelCard: React.FC<ModelCardProps> = ({
   downloadProgress,
   downloadSpeed,
   showRecommended = true,
+  children,
 }) => {
   const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
   const isFeatured = variant === "featured";
   const isClickable =
     status === "available" || status === "active" || status === "downloadable";
@@ -98,8 +103,11 @@ const ModelCard: React.FC<ModelCardProps> = ({
     return "cursor-pointer hover:border-logo-primary/50 hover:bg-logo-primary/5 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] group";
   };
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent | React.KeyboardEvent) => {
     if (!isClickable || disabled) return;
+    // Don't trigger model action when clicking nested interactive elements (buttons, inputs)
+    const target = e.target as HTMLElement;
+    if (target.closest("button, input, [role='region']")) return;
     if (status === "downloadable" && onDownload) {
       onDownload(model.id);
     } else {
@@ -116,7 +124,7 @@ const ModelCard: React.FC<ModelCardProps> = ({
     <div
       onClick={handleClick}
       onKeyDown={(e) => {
-        if (e.key === "Enter" && isClickable) handleClick();
+        if (e.key === "Enter" && isClickable) handleClick(e);
       }}
       role={isClickable ? "button" : undefined}
       tabIndex={isClickable ? 0 : undefined}
@@ -239,7 +247,35 @@ const ModelCard: React.FC<ModelCardProps> = ({
             <span>{t("common.delete")}</span>
           </Button>
         )}
+        {children && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded(!expanded);
+            }}
+            className="flex items-center gap-1.5 ml-auto text-logo-primary/85 hover:text-logo-primary hover:bg-logo-primary/10"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <ChevronDown
+              className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
+            />
+          </Button>
+        )}
       </div>
+
+      {/* Expandable configuration section */}
+      {children && expanded && (
+        <div
+          className="pt-2 border-t border-mid-gray/20"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          role="region"
+        >
+          {children}
+        </div>
+      )}
 
       {/* Download/extract progress */}
       {status === "downloading" && downloadProgress !== undefined && (
