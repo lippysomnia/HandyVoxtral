@@ -56,7 +56,7 @@
       },
       "voxtral-mini-realtime": {
         "name": "Voxtral Mini Realtime",
-        "description": "Basé sur le cloud. Rapide et précis, nécessite une clé API Mistral."
+        "description": "Basé sur le cloud avec écriture en temps réel. Rapide et précis, nécessite une clé API Mistral."
       }
     },
     "errors": {

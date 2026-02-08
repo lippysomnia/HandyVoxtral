@@ -56,7 +56,7 @@
       },
       "voxtral-mini-realtime": {
         "name": "Voxtral Mini Realtime",
-        "description": "Dựa trên đám mây. Nhanh và chính xác, cần khóa API Mistral."
+        "description": "Dựa trên đám mây với viết theo thời gian thực. Nhanh và chính xác, cần khóa API Mistral."
       }
     },
     "errors": {

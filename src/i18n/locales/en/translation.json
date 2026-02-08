@@ -56,7 +56,7 @@
       },
       "voxtral-mini-realtime": {
         "name": "Voxtral Mini Realtime",
-        "description": "Cloud-based. Fast and accurate, requires Mistral API key."
+        "description": "Cloud-based with real-time writing. Fast and accurate, requires Mistral API key."
       }
     },
     "errors": {

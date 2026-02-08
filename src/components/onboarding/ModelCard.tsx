@@ -2,6 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import {
   Check,
+  Cloud,
   Download,
   Globe,
   Languages,
@@ -200,6 +201,12 @@ const ModelCard: React.FC<ModelCardProps> = ({
           <Globe className="w-3.5 h-3.5" />
           <span>{getLanguageDisplayText(model.supported_languages, t)}</span>
         </div>
+        {model.is_cloud && (
+          <div className="flex items-center gap-1 text-xs text-blue-400">
+            <Cloud className="w-3.5 h-3.5" />
+            <span>{t("modelSelector.cloud")}</span>
+          </div>
+        )}
         {model.supports_translation && (
           <div
             className="flex items-center gap-1 text-xs text-text/50"

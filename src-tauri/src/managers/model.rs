@@ -297,7 +297,7 @@ impl ModelManager {
             ModelInfo {
                 id: "voxtral-mini-realtime".to_string(),
                 name: "Voxtral Mini Realtime".to_string(),
-                description: "Cloud-based. Fast and accurate, requires Mistral API key."
+                description: "Cloud-based with real-time writing. Fast and accurate, requires Mistral API key."
                     .to_string(),
                 filename: String::new(),
                 url: None,
