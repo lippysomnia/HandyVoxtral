@@ -319,6 +319,8 @@ pub struct AppSettings {
     pub paste_delay_ms: u64,
     #[serde(default)]
     pub mistral_api_key: String,
+    #[serde(default = "default_voxtral_model")]
+    pub voxtral_model: String,
     #[serde(default)]
     pub openrouter_api_key: String,
     #[serde(default)]
@@ -374,6 +376,10 @@ fn default_word_correction_threshold() -> f64 {
 
 fn default_paste_delay_ms() -> u64 {
     60
+}
+
+fn default_voxtral_model() -> String {
+    "voxtral-mini-transcribe-realtime-2602".to_string()
 }
 
 fn default_history_limit() -> usize {
@@ -639,6 +645,7 @@ pub fn get_default_settings() -> AppSettings {
         keyboard_implementation: KeyboardImplementation::default(),
         paste_delay_ms: default_paste_delay_ms(),
         mistral_api_key: String::new(),
+        voxtral_model: default_voxtral_model(),
         openrouter_api_key: String::new(),
         openrouter_model: String::new(),
     }

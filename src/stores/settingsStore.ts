@@ -129,6 +129,8 @@ const settingUpdaters: {
     commands.changeExperimentalEnabledSetting(value as boolean),
   mistral_api_key: (value) =>
     commands.changeMistralApiKeySetting(value as string),
+  voxtral_model: (value) =>
+    commands.changeVoxtralModelSetting(value as string),
   openrouter_api_key: (value) =>
     commands.changeOpenrouterApiKeySetting(value as string),
   openrouter_model: (value) =>

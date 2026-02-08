@@ -253,12 +253,12 @@ impl ShortcutAction for TranscribeAction {
         // For Voxtral, also captures the text receiver for realtime typing
         let start_recording = |rm: &AudioRecordingManager, binding_id: &str| -> (bool, Option<tokio::sync::mpsc::UnboundedReceiver<StreamingTextEvent>>) {
             if is_voxtral {
-                let api_key = tm.get_mistral_api_key();
+                let (api_key, model) = tm.get_voxtral_credentials();
                 if api_key.trim().is_empty() {
                     error!("Mistral API key is empty — cannot start streaming recording");
                     return (false, None);
                 }
-                match rm.start_streaming_recording(binding_id, api_key) {
+                match rm.start_streaming_recording(binding_id, api_key, model) {
                     Ok(text_rx) => (text_rx.is_some(), text_rx),
                     Err(e) => {
                         error!("Failed to start streaming recording: {}", e);

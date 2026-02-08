@@ -135,7 +135,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(history_manager.clone());
 
     // Pre-load the selected model in the background so it's ready when the user
-    // presses the hotkey. For cloud models (Voxtral) this validates the API key
+    // presses the hotkey. For cloud models this validates the API key
     // and sets the model as loaded immediately.
     transcription_manager.initiate_model_load();
 
@@ -276,6 +276,7 @@ pub fn run() {
         shortcut::change_append_trailing_space_setting,
         shortcut::change_mistral_api_key_setting,
         shortcut::change_openrouter_api_key_setting,
+        shortcut::change_voxtral_model_setting,
         shortcut::change_openrouter_model_setting,
         shortcut::change_app_language_setting,
         shortcut::change_update_checks_setting,

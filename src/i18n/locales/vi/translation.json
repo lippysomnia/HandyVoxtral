@@ -190,6 +190,11 @@
         "description": "Cần thiết cho chuyển đổi đám mây Voxtral. Lấy tại console.mistral.ai",
         "placeholder": "Nhập khóa API Mistral của bạn..."
       },
+      "voxtralModel": {
+        "title": "Mô hình",
+        "description": "Mô hình Voxtral để sử dụng cho chuyển đổi giọng nói",
+        "placeholder": "voxtral-mini-transcribe-realtime-2602"
+      },
       "openrouterApiKey": {
         "title": "Khóa API OpenRouter",
         "description": "Cần thiết cho chuyển đổi đám mây OpenRouter. Lấy tại openrouter.ai/keys",

@@ -7,10 +7,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
 
-use super::voxtral::convert_f32_to_s16le;
+use super::voxtral::{convert_f32_to_s16le, VOXTRAL_WS_BASE};
 
-const VOXTRAL_WS_URL: &str =
-    "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602";
 const TIMEOUT_SECS: u64 = 30;
 
 pub enum StreamingAudioMsg {
@@ -32,13 +30,13 @@ pub struct VoxtralStreamingSession {
 }
 
 impl VoxtralStreamingSession {
-    pub fn start(api_key: String) -> Result<Self> {
+    pub fn start(api_key: String, model: String) -> Result<Self> {
         let (audio_tx, audio_rx) = mpsc::unbounded_channel::<StreamingAudioMsg>();
         let (result_tx, result_rx) = oneshot::channel::<Result<String>>();
         let (text_tx, text_rx) = mpsc::unbounded_channel::<StreamingTextEvent>();
 
         let task_handle =
-            tauri::async_runtime::spawn(Self::run(api_key, audio_rx, result_tx, text_tx));
+            tauri::async_runtime::spawn(Self::run(api_key, model, audio_rx, result_tx, text_tx));
 
         Ok(Self {
             audio_tx,
@@ -50,21 +48,24 @@ impl VoxtralStreamingSession {
 
     async fn run(
         api_key: String,
+        model: String,
         mut audio_rx: mpsc::UnboundedReceiver<StreamingAudioMsg>,
         result_tx: oneshot::Sender<Result<String>>,
         text_tx: mpsc::UnboundedSender<StreamingTextEvent>,
     ) {
-        let result = Self::run_inner(&api_key, &mut audio_rx, &text_tx).await;
+        let result = Self::run_inner(&api_key, &model, &mut audio_rx, &text_tx).await;
         let _ = result_tx.send(result);
     }
 
     async fn run_inner(
         api_key: &str,
+        model: &str,
         audio_rx: &mut mpsc::UnboundedReceiver<StreamingAudioMsg>,
         text_tx: &mpsc::UnboundedSender<StreamingTextEvent>,
     ) -> Result<String> {
         // Build WebSocket request with auth header
-        let mut request = VOXTRAL_WS_URL.into_client_request()?;
+        let ws_url = format!("{}?model={}", VOXTRAL_WS_BASE, model);
+        let mut request = ws_url.as_str().into_client_request()?;
         request.headers_mut().insert(
             "Authorization",
             format!("Bearer {}", api_key).parse()?,

@@ -7,8 +7,7 @@ import { ModelCard } from "@/components/onboarding";
 import { useModelStore } from "@/stores/modelStore";
 import { LANGUAGES } from "@/lib/constants/languages.ts";
 import type { ModelInfo } from "@/bindings";
-import { MistralApiKey } from "../MistralApiKey";
-import { OpenRouterConfig } from "../OpenRouterConfig";
+import { CloudEngineConfig } from "../CloudEngineConfig";
 
 // check if model supports a language based on its supported_languages list
 const modelSupportsLanguage = (model: ModelInfo, langCode: string): boolean => {
@@ -237,8 +236,22 @@ export const ModelsSettings: React.FC = () => {
                   downloadSpeed={getDownloadSpeed(model.id)}
                   showRecommended={false}
                 >
-                  {model.engine_type === "Voxtral" && <MistralApiKey />}
-                  {model.engine_type === "OpenRouter" && <OpenRouterConfig />}
+                  {model.engine_type === "Voxtral" && (
+                    <CloudEngineConfig
+                      apiKeySettingKey="mistral_api_key"
+                      apiKeyI18nPrefix="settings.general.mistralApiKey"
+                      modelSettingKey="voxtral_model"
+                      modelI18nPrefix="settings.general.voxtralModel"
+                    />
+                  )}
+                  {model.engine_type === "OpenRouter" && (
+                    <CloudEngineConfig
+                      apiKeySettingKey="openrouter_api_key"
+                      apiKeyI18nPrefix="settings.general.openrouterApiKey"
+                      modelSettingKey="openrouter_model"
+                      modelI18nPrefix="settings.general.openrouterModel"
+                    />
+                  )}
                 </ModelCard>
               ))}
             </div>

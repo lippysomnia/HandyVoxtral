@@ -190,6 +190,11 @@
         "description": "Requerida para la transcripción en la nube Voxtral. Obtén una en console.mistral.ai",
         "placeholder": "Ingresa tu clave API de Mistral..."
       },
+      "voxtralModel": {
+        "title": "Modelo",
+        "description": "El modelo Voxtral a usar para la transcripción",
+        "placeholder": "voxtral-mini-transcribe-realtime-2602"
+      },
       "openrouterApiKey": {
         "title": "Clave API de OpenRouter",
         "description": "Requerida para la transcripción en la nube OpenRouter. Obtén una en openrouter.ai/keys",

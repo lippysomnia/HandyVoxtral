@@ -451,13 +451,14 @@ impl AudioRecordingManager {
         &self,
         binding_id: &str,
         api_key: String,
+        model: String,
     ) -> Result<
         Option<tokio::sync::mpsc::UnboundedReceiver<crate::managers::voxtral_streaming::StreamingTextEvent>>,
         anyhow::Error,
     > {
         use crate::managers::voxtral_streaming::StreamingAudioMsg;
 
-        let mut session = VoxtralStreamingSession::start(api_key)?;
+        let mut session = VoxtralStreamingSession::start(api_key, model)?;
 
         // Take the text event receiver before storing the session
         let text_rx = session.take_text_receiver();

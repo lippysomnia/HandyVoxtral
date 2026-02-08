@@ -6,18 +6,19 @@ use log::{debug, error, info};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
 
-const VOXTRAL_WS_URL: &str =
-    "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-2602";
+pub(crate) const VOXTRAL_WS_BASE: &str =
+    "wss://api.mistral.ai/v1/audio/transcriptions/realtime";
 const CHUNK_SIZE: usize = 32768; // ~32KB chunks
 const TIMEOUT_SECS: u64 = 30;
 
 pub struct VoxtralEngine {
     api_key: String,
+    model: String,
 }
 
 impl VoxtralEngine {
-    pub fn new(api_key: String) -> Self {
-        Self { api_key }
+    pub fn new(api_key: String, model: String) -> Self {
+        Self { api_key, model }
     }
 
     pub async fn transcribe(&self, audio: Vec<f32>) -> Result<String> {
@@ -29,7 +30,8 @@ impl VoxtralEngine {
         );
 
         // Build WebSocket request with auth header
-        let mut request = VOXTRAL_WS_URL.into_client_request()?;
+        let ws_url = format!("{}?model={}", VOXTRAL_WS_BASE, self.model);
+        let mut request = ws_url.as_str().into_client_request()?;
         request.headers_mut().insert(
             "Authorization",
             format!("Bearer {}", self.api_key).parse()?,

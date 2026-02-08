@@ -38,6 +38,27 @@ enum LoadedEngine {
     OpenRouter,
 }
 
+impl LoadedEngine {
+    fn is_cloud(&self) -> bool {
+        matches!(self, LoadedEngine::Voxtral | LoadedEngine::OpenRouter)
+    }
+}
+
+/// Runs an async cloud transcription on a dedicated thread to avoid holding
+/// the engine mutex across the await point.
+fn run_cloud_transcription<F, Fut>(label: &str, create_and_run: F) -> Result<String>
+where
+    F: FnOnce() -> Fut + Send + 'static,
+    Fut: std::future::Future<Output = Result<String>> + Send + 'static,
+{
+    let handle = tokio::runtime::Handle::current();
+    let label_owned = label.to_string();
+    std::thread::spawn(move || handle.block_on(create_and_run()))
+        .join()
+        .map_err(|_| anyhow::anyhow!("{} transcription thread panicked", label_owned))?
+        .map_err(|e| anyhow::anyhow!("{} transcription failed: {}", label, e))
+}
+
 #[derive(Clone)]
 pub struct TranscriptionManager {
     engine: Arc<Mutex<Option<LoadedEngine>>>,
@@ -145,12 +166,13 @@ impl TranscriptionManager {
         {
             let mut engine = self.engine.lock().unwrap();
             if let Some(ref mut loaded_engine) = *engine {
-                match loaded_engine {
-                    LoadedEngine::Whisper(ref mut e) => e.unload_model(),
-                    LoadedEngine::Parakeet(ref mut e) => e.unload_model(),
-                    LoadedEngine::Moonshine(ref mut e) => e.unload_model(),
-                    LoadedEngine::Voxtral => {} // No-op: cloud engine has nothing to unload
-                    LoadedEngine::OpenRouter => {} // No-op: cloud engine has nothing to unload
+                if !loaded_engine.is_cloud() {
+                    match loaded_engine {
+                        LoadedEngine::Whisper(ref mut e) => e.unload_model(),
+                        LoadedEngine::Parakeet(ref mut e) => e.unload_model(),
+                        LoadedEngine::Moonshine(ref mut e) => e.unload_model(),
+                        _ => {}
+                    }
                 }
             }
             *engine = None; // Drop the engine to free memory
@@ -188,10 +210,7 @@ impl TranscriptionManager {
             // Skip unloading for cloud engines - nothing to free
             {
                 let engine_guard = self.engine.lock().unwrap();
-                if matches!(
-                    engine_guard.as_ref(),
-                    Some(LoadedEngine::Voxtral) | Some(LoadedEngine::OpenRouter)
-                ) {
+                if engine_guard.as_ref().is_some_and(|e| e.is_cloud()) {
                     return;
                 }
             }
@@ -465,13 +484,10 @@ impl TranscriptionManager {
                             "Mistral API key is required. Set it in the Models tab."
                         ));
                     }
-
-                    let voxtral = VoxtralEngine::new(api_key);
-                    let handle = tokio::runtime::Handle::current();
-                    std::thread::spawn(move || handle.block_on(voxtral.transcribe(audio)))
-                        .join()
-                        .map_err(|_| anyhow::anyhow!("Voxtral transcription thread panicked"))?
-                        .map_err(|e| anyhow::anyhow!("Voxtral transcription failed: {}", e))?
+                    let model = settings.voxtral_model.clone();
+                    run_cloud_transcription("Voxtral", move || async move {
+                        VoxtralEngine::new(api_key, model).transcribe(audio).await
+                    })?
                 }
                 EngineType::OpenRouter => {
                     let api_key = settings.openrouter_api_key.clone();
@@ -486,13 +502,9 @@ impl TranscriptionManager {
                             "OpenRouter model name is required. Set it in the Models tab."
                         ));
                     }
-
-                    let openrouter = OpenRouterEngine::new(api_key, model);
-                    let handle = tokio::runtime::Handle::current();
-                    std::thread::spawn(move || handle.block_on(openrouter.transcribe(audio)))
-                        .join()
-                        .map_err(|_| anyhow::anyhow!("OpenRouter transcription thread panicked"))?
-                        .map_err(|e| anyhow::anyhow!("OpenRouter transcription failed: {}", e))?
+                    run_cloud_transcription("OpenRouter", move || async move {
+                        OpenRouterEngine::new(api_key, model).transcribe(audio).await
+                    })?
                 }
                 _ => return Err(anyhow::anyhow!("Unknown cloud engine type")),
             };
@@ -632,9 +644,10 @@ impl TranscriptionManager {
             .unwrap_or(false)
     }
 
-    /// Get the Mistral API key from settings
-    pub fn get_mistral_api_key(&self) -> String {
-        get_settings(&self.app_handle).mistral_api_key.clone()
+    /// Get the Voxtral credentials (API key, model) from settings
+    pub fn get_voxtral_credentials(&self) -> (String, String) {
+        let settings = get_settings(&self.app_handle);
+        (settings.mistral_api_key.clone(), settings.voxtral_model.clone())
     }
 }
 
