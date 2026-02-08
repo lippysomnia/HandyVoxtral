@@ -222,7 +222,7 @@ const ModelCard: React.FC<ModelCardProps> = ({
             <span>{formatModelSize(Number(model.size_mb))}</span>
           </span>
         )}
-        {onDelete && (status === "available" || status === "active") && (
+        {onDelete && !model.is_cloud && (status === "available" || status === "active") && (
           <Button
             variant="ghost"
             size="sm"

@@ -134,6 +134,7 @@
       },
       "noModelsMatch": "Aucun modèle ne correspond à ce filtre.",
       "yourModels": "Modèles téléchargés",
+      "cloudModels": "Modèles cloud",
       "availableModels": "Disponibles au téléchargement"
     },
     "general": {

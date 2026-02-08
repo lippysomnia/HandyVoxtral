@@ -134,6 +134,7 @@
       },
       "noModelsMatch": "Ningún modelo coincide con este filtro.",
       "yourModels": "Modelos descargados",
+      "cloudModels": "Modelos en la nube",
       "availableModels": "Disponibles para descargar"
     },
     "general": {

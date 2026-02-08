@@ -170,6 +170,7 @@
       "title": "Transcription Models",
       "description": "Select a transcription model or download additional models. Different models offer varying levels of accuracy and speed.",
       "yourModels": "Downloaded Models",
+      "cloudModels": "Cloud Models",
       "availableModels": "Available to Download",
       "downloaded": "Downloaded",
       "available": "Available to Download",

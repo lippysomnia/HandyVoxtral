@@ -159,20 +159,25 @@ export const ModelsSettings: React.FC = () => {
     });
   }, [models, languageFilter]);
 
-  // Split filtered models into downloaded and available sections
-  const { downloadedModels, availableModels } = useMemo(() => {
+  // Split filtered models into cloud, downloaded, and available sections
+  const { cloudModels, downloadedModels, availableModels } = useMemo(() => {
+    const cloud: ModelInfo[] = [];
     const downloaded: ModelInfo[] = [];
     const available: ModelInfo[] = [];
 
     for (const model of filteredModels) {
-      const isDownloaded =
-        model.is_downloaded ||
-        model.id in downloadingModels ||
-        model.id in extractingModels;
-      if (isDownloaded) {
-        downloaded.push(model);
+      if (model.is_cloud) {
+        cloud.push(model);
       } else {
-        available.push(model);
+        const isDownloaded =
+          model.is_downloaded ||
+          model.id in downloadingModels ||
+          model.id in extractingModels;
+        if (isDownloaded) {
+          downloaded.push(model);
+        } else {
+          available.push(model);
+        }
       }
     }
 
@@ -183,7 +188,7 @@ export const ModelsSettings: React.FC = () => {
       return 0;
     });
 
-    return { downloadedModels: downloaded, availableModels: available };
+    return { cloudModels: cloud, downloadedModels: downloaded, availableModels: available };
   }, [filteredModels, downloadingModels, extractingModels, currentModel]);
 
   if (loading) {
@@ -208,6 +213,28 @@ export const ModelsSettings: React.FC = () => {
       </div>
       {filteredModels.length > 0 ? (
         <div className="space-y-6">
+          {/* Cloud Models Section */}
+          {cloudModels.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-medium text-text/60">
+                {t("settings.models.cloudModels")}
+              </h2>
+              {cloudModels.map((model: ModelInfo) => (
+                <ModelCard
+                  key={model.id}
+                  model={model}
+                  status={getModelStatus(model.id)}
+                  onSelect={handleModelSelect}
+                  onDownload={handleModelDownload}
+                  onCancel={handleModelCancel}
+                  downloadProgress={getDownloadProgress(model.id)}
+                  downloadSpeed={getDownloadSpeed(model.id)}
+                  showRecommended={false}
+                />
+              ))}
+            </div>
+          )}
+
           {/* Downloaded Models Section */}
           {downloadedModels.length > 0 && (
             <div className="space-y-3">
