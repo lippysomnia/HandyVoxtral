@@ -8,10 +8,12 @@ import type { ClipboardHandling } from "@/bindings";
 interface ClipboardHandlingProps {
   descriptionMode?: "inline" | "tooltip";
   grouped?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export const ClipboardHandlingSetting: React.FC<ClipboardHandlingProps> =
-  React.memo(({ descriptionMode = "tooltip", grouped = false }) => {
+  React.memo(({ descriptionMode = "tooltip", grouped = false, disabled = false, disabledReason }) => {
     const { t } = useTranslation();
     const { getSetting, updateSetting, isUpdating } = useSettings();
 
@@ -35,6 +37,8 @@ export const ClipboardHandlingSetting: React.FC<ClipboardHandlingProps> =
         description={t("settings.advanced.clipboardHandling.description")}
         descriptionMode={descriptionMode}
         grouped={grouped}
+        disabled={disabled}
+        disabledReason={disabledReason}
       >
         <Dropdown
           options={clipboardHandlingOptions}
@@ -42,7 +46,7 @@ export const ClipboardHandlingSetting: React.FC<ClipboardHandlingProps> =
           onSelect={(value) =>
             updateSetting("clipboard_handling", value as ClipboardHandling)
           }
-          disabled={isUpdating("clipboard_handling")}
+          disabled={disabled || isUpdating("clipboard_handling")}
         />
       </SettingContainer>
     );

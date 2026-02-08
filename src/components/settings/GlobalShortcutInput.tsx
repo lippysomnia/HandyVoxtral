@@ -17,6 +17,7 @@ interface GlobalShortcutInputProps {
   grouped?: boolean;
   shortcutId: string;
   disabled?: boolean;
+  disabledReason?: string;
 }
 
 export const GlobalShortcutInput: React.FC<GlobalShortcutInputProps> = ({
@@ -24,6 +25,7 @@ export const GlobalShortcutInput: React.FC<GlobalShortcutInputProps> = ({
   grouped = false,
   shortcutId,
   disabled = false,
+  disabledReason,
 }) => {
   const { t } = useTranslation();
   const { getSetting, updateBinding, resetBinding, isUpdating, isLoading } =
@@ -287,6 +289,7 @@ export const GlobalShortcutInput: React.FC<GlobalShortcutInputProps> = ({
       descriptionMode={descriptionMode}
       grouped={grouped}
       disabled={disabled}
+      disabledReason={disabledReason}
       layout="horizontal"
     >
       <div className="flex items-center space-x-1">

@@ -179,6 +179,7 @@
         "description": "Maintenez pour enregistrer, relâchez pour arrêter"
       },
       "cloudTranscription": "Transcription Cloud",
+      "disabledForRealtime": "Non disponible en mode temps réel",
       "mistralApiKey": {
         "title": "Clé API Mistral",
         "description": "Requise pour la transcription cloud Voxtral. Obtenez-en une sur console.mistral.ai",

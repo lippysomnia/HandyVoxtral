@@ -6,10 +6,12 @@ import { useSettings } from "../../hooks/useSettings";
 interface AppendTrailingSpaceProps {
   descriptionMode?: "inline" | "tooltip";
   grouped?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export const AppendTrailingSpace: React.FC<AppendTrailingSpaceProps> =
-  React.memo(({ descriptionMode = "tooltip", grouped = false }) => {
+  React.memo(({ descriptionMode = "tooltip", grouped = false, disabled = false, disabledReason }) => {
     const { t } = useTranslation();
     const { getSetting, updateSetting, isUpdating } = useSettings();
 
@@ -19,6 +21,8 @@ export const AppendTrailingSpace: React.FC<AppendTrailingSpaceProps> =
       <ToggleSwitch
         checked={enabled}
         onChange={(enabled) => updateSetting("append_trailing_space", enabled)}
+        disabled={disabled}
+        disabledReason={disabledReason}
         isUpdating={isUpdating("append_trailing_space")}
         label={t("settings.debug.appendTrailingSpace.label")}
         description={t("settings.debug.appendTrailingSpace.description")}

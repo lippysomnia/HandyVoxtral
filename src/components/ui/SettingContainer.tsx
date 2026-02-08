@@ -9,6 +9,7 @@ interface SettingContainerProps {
   grouped?: boolean;
   layout?: "horizontal" | "stacked";
   disabled?: boolean;
+  disabledReason?: string;
   tooltipPosition?: "top" | "bottom";
 }
 
@@ -20,6 +21,7 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
   grouped = false,
   layout = "horizontal",
   disabled = false,
+  disabledReason,
   tooltipPosition = "top",
 }) => {
   const [showTooltip, setShowTooltip] = useState(false);
@@ -47,6 +49,8 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
     setShowTooltip(!showTooltip);
   };
 
+  const disabledTitle = disabled && disabledReason ? disabledReason : undefined;
+
   const containerClasses = grouped
     ? "px-4 p-2"
     : "px-4 p-2 rounded-lg border border-mid-gray/20";
@@ -54,7 +58,7 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
   if (layout === "stacked") {
     if (descriptionMode === "tooltip") {
       return (
-        <div className={containerClasses}>
+        <div className={containerClasses} title={disabledTitle}>
           <div className="flex items-center gap-2 mb-2">
             <h3
               className={`text-sm font-medium ${disabled ? "opacity-50" : ""}`}
@@ -105,7 +109,7 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
     }
 
     return (
-      <div className={containerClasses}>
+      <div className={containerClasses} title={disabledTitle}>
         <div className="mb-2">
           <h3 className={`text-sm font-medium ${disabled ? "opacity-50" : ""}`}>
             {title}
@@ -126,7 +130,7 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
 
   if (descriptionMode === "tooltip") {
     return (
-      <div className={horizontalContainerClasses}>
+      <div className={horizontalContainerClasses} title={disabledTitle}>
         <div className="max-w-2/3">
           <div className="flex items-center gap-2">
             <h3
@@ -179,7 +183,7 @@ export const SettingContainer: React.FC<SettingContainerProps> = ({
   }
 
   return (
-    <div className={horizontalContainerClasses}>
+    <div className={horizontalContainerClasses} title={disabledTitle}>
       <div className="max-w-2/3">
         <h3 className={`text-sm font-medium ${disabled ? "opacity-50" : ""}`}>
           {title}

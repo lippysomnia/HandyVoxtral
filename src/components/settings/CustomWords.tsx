@@ -8,10 +8,12 @@ import { SettingContainer } from "../ui/SettingContainer";
 interface CustomWordsProps {
   descriptionMode?: "inline" | "tooltip";
   grouped?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export const CustomWords: React.FC<CustomWordsProps> = React.memo(
-  ({ descriptionMode = "tooltip", grouped = false }) => {
+  ({ descriptionMode = "tooltip", grouped = false, disabled = false, disabledReason }) => {
     const { t } = useTranslation();
     const { getSetting, updateSetting, isUpdating } = useSettings();
     const [newWord, setNewWord] = useState("");
@@ -52,6 +54,8 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
           description={t("settings.advanced.customWords.description")}
           descriptionMode={descriptionMode}
           grouped={grouped}
+          disabled={disabled}
+          disabledReason={disabledReason}
         >
           <div className="flex items-center gap-2">
             <Input
@@ -62,11 +66,12 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
               onKeyDown={handleKeyPress}
               placeholder={t("settings.advanced.customWords.placeholder")}
               variant="compact"
-              disabled={isUpdating("custom_words")}
+              disabled={disabled || isUpdating("custom_words")}
             />
             <Button
               onClick={handleAddWord}
               disabled={
+                disabled ||
                 !newWord.trim() ||
                 newWord.includes(" ") ||
                 newWord.trim().length > 50 ||
@@ -87,7 +92,7 @@ export const CustomWords: React.FC<CustomWordsProps> = React.memo(
               <Button
                 key={word}
                 onClick={() => handleRemoveWord(word)}
-                disabled={isUpdating("custom_words")}
+                disabled={disabled || isUpdating("custom_words")}
                 variant="secondary"
                 size="sm"
                 className="inline-flex items-center gap-1 cursor-pointer"

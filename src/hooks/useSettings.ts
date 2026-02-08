@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useSettingsStore } from "../stores/settingsStore";
+import { useModelStore } from "../stores/modelStore";
 import type { AppSettings as Settings, AudioDevice } from "@/bindings";
 
 interface UseSettingsReturn {
@@ -10,6 +11,7 @@ interface UseSettingsReturn {
   audioDevices: AudioDevice[];
   outputDevices: AudioDevice[];
   audioFeedbackEnabled: boolean;
+  isRealtimeMode: boolean;
   postProcessModelOptions: Record<string, string[]>;
 
   // Actions
@@ -45,6 +47,7 @@ interface UseSettingsReturn {
 
 export const useSettings = (): UseSettingsReturn => {
   const store = useSettingsStore();
+  const { currentModel, models } = useModelStore();
 
   // Initialize on first mount
   useEffect(() => {
@@ -53,6 +56,11 @@ export const useSettings = (): UseSettingsReturn => {
     }
   }, [store.initialize, store.isLoading]);
 
+  const currentModelInfo = models.find((m) => m.id === currentModel);
+  const isVoxtral = currentModelInfo?.engine_type === "Voxtral";
+  const isDirect = store.settings?.paste_method === "direct";
+  const isRealtimeMode = isVoxtral && isDirect;
+
   return {
     settings: store.settings,
     isLoading: store.isLoading,
@@ -60,6 +68,7 @@ export const useSettings = (): UseSettingsReturn => {
     audioDevices: store.audioDevices,
     outputDevices: store.outputDevices,
     audioFeedbackEnabled: store.settings?.audio_feedback || false,
+    isRealtimeMode,
     postProcessModelOptions: store.postProcessModelOptions,
     updateSetting: store.updateSetting,
     resetSetting: store.resetSetting,

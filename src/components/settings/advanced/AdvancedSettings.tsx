@@ -18,8 +18,9 @@ import { KeyboardImplementationSelector } from "../debug/KeyboardImplementationS
 
 export const AdvancedSettings: React.FC = () => {
   const { t } = useTranslation();
-  const { getSetting } = useSettings();
+  const { getSetting, isRealtimeMode } = useSettings();
   const experimentalEnabled = getSetting("experimental_enabled") || false;
+  const realtimeDisabledReason = isRealtimeMode ? t("settings.general.disabledForRealtime") : undefined;
 
   return (
     <div className="max-w-3xl w-full mx-auto space-y-6">
@@ -33,12 +34,12 @@ export const AdvancedSettings: React.FC = () => {
 
       <SettingsGroup title={t("settings.advanced.groups.output")}>
         <PasteMethodSetting descriptionMode="tooltip" grouped={true} />
-        <ClipboardHandlingSetting descriptionMode="tooltip" grouped={true} />
+        <ClipboardHandlingSetting descriptionMode="tooltip" grouped={true} disabled={isRealtimeMode} disabledReason={realtimeDisabledReason} />
       </SettingsGroup>
 
       <SettingsGroup title={t("settings.advanced.groups.transcription")}>
-        <CustomWords descriptionMode="tooltip" grouped />
-        <AppendTrailingSpace descriptionMode="tooltip" grouped={true} />
+        <CustomWords descriptionMode="tooltip" grouped disabled={isRealtimeMode} disabledReason={realtimeDisabledReason} />
+        <AppendTrailingSpace descriptionMode="tooltip" grouped={true} disabled={isRealtimeMode} disabledReason={realtimeDisabledReason} />
       </SettingsGroup>
 
       <SettingsGroup title={t("settings.advanced.groups.history")}>

@@ -179,6 +179,7 @@
         "description": "Giữ để ghi âm, thả để dừng"
       },
       "cloudTranscription": "Chuyển đổi đám mây",
+      "disabledForRealtime": "Không khả dụng trong chế độ thời gian thực",
       "mistralApiKey": {
         "title": "Khóa API Mistral",
         "description": "Cần thiết cho chuyển đổi đám mây Voxtral. Lấy tại console.mistral.ai",

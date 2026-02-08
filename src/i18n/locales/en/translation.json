@@ -160,6 +160,7 @@
         "description": "Hold to record, release to stop"
       },
       "cloudTranscription": "Cloud Transcription",
+      "disabledForRealtime": "Not available in realtime mode",
       "mistralApiKey": {
         "title": "Mistral API Key",
         "description": "Required for Voxtral cloud transcription. Get one at console.mistral.ai",

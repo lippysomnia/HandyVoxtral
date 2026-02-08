@@ -14,6 +14,7 @@ interface HandyKeysShortcutInputProps {
   grouped?: boolean;
   shortcutId: string;
   disabled?: boolean;
+  disabledReason?: string;
 }
 
 interface HandyKeysEvent {
@@ -28,6 +29,7 @@ export const HandyKeysShortcutInput: React.FC<HandyKeysShortcutInputProps> = ({
   grouped = false,
   shortcutId,
   disabled = false,
+  disabledReason,
 }) => {
   const { t } = useTranslation();
   const { getSetting, updateBinding, resetBinding, isUpdating, isLoading } =
@@ -272,6 +274,7 @@ export const HandyKeysShortcutInput: React.FC<HandyKeysShortcutInputProps> = ({
       descriptionMode={descriptionMode}
       grouped={grouped}
       disabled={disabled}
+      disabledReason={disabledReason}
       layout="horizontal"
     >
       <div className="flex items-center space-x-1">

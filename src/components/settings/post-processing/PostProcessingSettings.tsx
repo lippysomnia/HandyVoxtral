@@ -425,6 +425,8 @@ PostProcessingSettingsPrompts.displayName = "PostProcessingSettingsPrompts";
 
 export const PostProcessingSettings: React.FC = () => {
   const { t } = useTranslation();
+  const { isRealtimeMode } = useSettings();
+  const realtimeDisabledReason = isRealtimeMode ? t("settings.general.disabledForRealtime") : undefined;
 
   return (
     <div className="max-w-3xl w-full mx-auto space-y-6">
@@ -433,6 +435,8 @@ export const PostProcessingSettings: React.FC = () => {
           shortcutId="transcribe_with_post_process"
           descriptionMode="tooltip"
           grouped={true}
+          disabled={isRealtimeMode}
+          disabledReason={realtimeDisabledReason}
         />
       </SettingsGroup>
 

@@ -5,6 +5,7 @@ interface ToggleSwitchProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
+  disabledReason?: string;
   isUpdating?: boolean;
   label: string;
   description: string;
@@ -17,6 +18,7 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
   checked,
   onChange,
   disabled = false,
+  disabledReason,
   isUpdating = false,
   label,
   description,
@@ -31,6 +33,7 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
       descriptionMode={descriptionMode}
       grouped={grouped}
       disabled={disabled}
+      disabledReason={disabledReason}
       tooltipPosition={tooltipPosition}
     >
       <label
