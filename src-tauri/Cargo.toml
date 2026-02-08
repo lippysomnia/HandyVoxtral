@@ -70,6 +70,8 @@ tar = "0.4.44"
 flate2 = "1.0"
 transcribe-rs = { version = "0.2.2", features = ["whisper", "parakeet", "moonshine"] }
 handy-keys = "0.1.4"
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
+base64 = "0.22"
 ferrous-opencc = "0.2.3"
 specta = "=2.0.0-rc.22"
 specta-typescript = "0.0.9"

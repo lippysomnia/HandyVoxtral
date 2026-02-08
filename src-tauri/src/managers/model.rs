@@ -19,6 +19,7 @@ pub enum EngineType {
     Whisper,
     Parakeet,
     Moonshine,
+    Voxtral,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -36,6 +37,8 @@ pub struct ModelInfo {
     pub engine_type: EngineType,
     pub accuracy_score: f32, // 0.0 to 1.0, higher is more accurate
     pub speed_score: f32,    // 0.0 to 1.0, higher is faster
+    #[serde(default)]
+    pub is_cloud: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -84,6 +87,7 @@ impl ModelManager {
                 engine_type: EngineType::Whisper,
                 accuracy_score: 0.60,
                 speed_score: 0.85,
+                is_cloud: false,
             },
         );
 
@@ -104,6 +108,7 @@ impl ModelManager {
                 engine_type: EngineType::Whisper,
                 accuracy_score: 0.75,
                 speed_score: 0.60,
+                is_cloud: false,
             },
         );
 
@@ -123,6 +128,7 @@ impl ModelManager {
                 engine_type: EngineType::Whisper,
                 accuracy_score: 0.80,
                 speed_score: 0.40,
+                is_cloud: false,
             },
         );
 
@@ -142,6 +148,7 @@ impl ModelManager {
                 engine_type: EngineType::Whisper,
                 accuracy_score: 0.85,
                 speed_score: 0.30,
+                is_cloud: false,
             },
         );
 
@@ -162,6 +169,7 @@ impl ModelManager {
                 engine_type: EngineType::Parakeet,
                 accuracy_score: 0.85,
                 speed_score: 0.85,
+                is_cloud: false,
             },
         );
 
@@ -181,6 +189,7 @@ impl ModelManager {
                 engine_type: EngineType::Parakeet,
                 accuracy_score: 0.80,
                 speed_score: 0.85,
+                is_cloud: false,
             },
         );
 
@@ -200,6 +209,28 @@ impl ModelManager {
                 engine_type: EngineType::Moonshine,
                 accuracy_score: 0.70,
                 speed_score: 0.90,
+                is_cloud: false,
+            },
+        );
+
+        // Cloud models
+        available_models.insert(
+            "voxtral-mini-realtime".to_string(),
+            ModelInfo {
+                id: "voxtral-mini-realtime".to_string(),
+                name: "Voxtral Mini Realtime".to_string(),
+                description: "Cloud-based. Fast and accurate, requires Mistral API key.".to_string(),
+                filename: String::new(),
+                url: None,
+                size_mb: 0,
+                is_downloaded: true,
+                is_downloading: false,
+                partial_size: 0,
+                is_directory: false,
+                engine_type: EngineType::Voxtral,
+                accuracy_score: 0.90,
+                speed_score: 0.95,
+                is_cloud: true,
             },
         );
 
@@ -262,6 +293,9 @@ impl ModelManager {
         let mut models = self.available_models.lock().unwrap();
 
         for model in models.values_mut() {
+            if model.is_cloud {
+                continue;
+            }
             if model.is_directory {
                 // For directory-based models, check if the directory exists
                 let model_path = self.models_dir.join(&model.filename);
@@ -618,6 +652,10 @@ impl ModelManager {
         let model_info =
             model_info.ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
 
+        if model_info.is_cloud {
+            return Err(anyhow::anyhow!("Cannot delete cloud model: {}", model_id));
+        }
+
         debug!("ModelManager: Found model info: {:?}", model_info);
 
         let model_path = self.models_dir.join(&model_info.filename);
@@ -670,6 +708,13 @@ impl ModelManager {
         let model_info = self
             .get_model_info(model_id)
             .ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
+
+        if model_info.is_cloud {
+            return Err(anyhow::anyhow!(
+                "Cloud model has no local path: {}",
+                model_id
+            ));
+        }
 
         if !model_info.is_downloaded {
             return Err(anyhow::anyhow!("Model not available: {}", model_id));

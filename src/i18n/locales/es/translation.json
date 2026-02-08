@@ -51,6 +51,10 @@
       "moonshine-base": {
         "name": "Moonshine Base",
         "description": "Very fast, English only. Handles accents well."
+      },
+      "voxtral-mini-realtime": {
+        "name": "Voxtral Mini Realtime",
+        "description": "Basado en la nube. Rápido y preciso, requiere clave API de Mistral."
       }
     },
     "errors": {
@@ -95,7 +99,8 @@
     "modelError": "Error del Modelo",
     "modelUnloaded": "Modelo Descargado",
     "noModelDownloadRequired": "Sin Modelo - Descarga Requerida",
-    "deleteModel": "Eliminar {{modelName}}"
+    "deleteModel": "Eliminar {{modelName}}",
+    "cloud": "Nube"
   },
   "settings": {
     "general": {
@@ -134,6 +139,12 @@
       "pushToTalk": {
         "label": "Presionar para Hablar",
         "description": "Mantén presionado para grabar, suelta para detener"
+      },
+      "cloudTranscription": "Transcripción en la Nube",
+      "mistralApiKey": {
+        "title": "Clave API de Mistral",
+        "description": "Requerida para la transcripción en la nube Voxtral. Obtén una en console.mistral.ai",
+        "placeholder": "Ingresa tu clave API de Mistral..."
       }
     },
     "sound": {

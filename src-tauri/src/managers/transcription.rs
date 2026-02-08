@@ -1,5 +1,6 @@
 use crate::audio_toolkit::{apply_custom_words, filter_transcription_output};
 use crate::managers::model::{EngineType, ModelManager};
+use crate::managers::voxtral::VoxtralEngine;
 use crate::settings::{get_settings, ModelUnloadTimeout};
 use anyhow::Result;
 use log::{debug, error, info, warn};
@@ -32,6 +33,7 @@ enum LoadedEngine {
     Whisper(WhisperEngine),
     Parakeet(ParakeetEngine),
     Moonshine(MoonshineEngine),
+    Voxtral(VoxtralEngine),
 }
 
 #[derive(Clone)]
@@ -145,6 +147,7 @@ impl TranscriptionManager {
                     LoadedEngine::Whisper(ref mut e) => e.unload_model(),
                     LoadedEngine::Parakeet(ref mut e) => e.unload_model(),
                     LoadedEngine::Moonshine(ref mut e) => e.unload_model(),
+                    LoadedEngine::Voxtral(_) => {} // No-op: cloud engine has nothing to unload
                 }
             }
             *engine = None; // Drop the engine to free memory
@@ -179,6 +182,13 @@ impl TranscriptionManager {
         if settings.model_unload_timeout == ModelUnloadTimeout::Immediately
             && self.is_model_loaded()
         {
+            // Skip unloading for cloud engines - nothing to free
+            {
+                let engine_guard = self.engine.lock().unwrap();
+                if let Some(LoadedEngine::Voxtral(_)) = engine_guard.as_ref() {
+                    return;
+                }
+            }
             info!("Immediately unloading model after {}", context);
             if let Err(e) = self.unload_model() {
                 warn!("Failed to immediately unload model: {}", e);
@@ -218,6 +228,57 @@ impl TranscriptionManager {
                 },
             );
             return Err(anyhow::anyhow!(error_msg));
+        }
+
+        // Cloud models don't need a local model path
+        if model_info.is_cloud {
+            let loaded_engine = match model_info.engine_type {
+                EngineType::Voxtral => {
+                    let settings = get_settings(&self.app_handle);
+                    if settings.mistral_api_key.trim().is_empty() {
+                        let error_msg = "Mistral API key is required. Set it in General Settings when Voxtral is selected.";
+                        let _ = self.app_handle.emit(
+                            "model-state-changed",
+                            ModelStateEvent {
+                                event_type: "loading_failed".to_string(),
+                                model_id: Some(model_id.to_string()),
+                                model_name: Some(model_info.name.clone()),
+                                error: Some(error_msg.to_string()),
+                            },
+                        );
+                        return Err(anyhow::anyhow!(error_msg));
+                    }
+                    LoadedEngine::Voxtral(VoxtralEngine::new(settings.mistral_api_key.clone()))
+                }
+                _ => return Err(anyhow::anyhow!("Unknown cloud engine type")),
+            };
+
+            {
+                let mut engine = self.engine.lock().unwrap();
+                *engine = Some(loaded_engine);
+            }
+            {
+                let mut current_model = self.current_model_id.lock().unwrap();
+                *current_model = Some(model_id.to_string());
+            }
+
+            let _ = self.app_handle.emit(
+                "model-state-changed",
+                ModelStateEvent {
+                    event_type: "loading_completed".to_string(),
+                    model_id: Some(model_id.to_string()),
+                    model_name: Some(model_info.name.clone()),
+                    error: None,
+                },
+            );
+
+            let load_duration = load_start.elapsed();
+            debug!(
+                "Successfully loaded cloud transcription engine: {} (took {}ms)",
+                model_id,
+                load_duration.as_millis()
+            );
+            return Ok(());
         }
 
         let model_path = self.model_manager.get_model_path(model_id)?;
@@ -283,6 +344,10 @@ impl TranscriptionManager {
                         anyhow::anyhow!(error_msg)
                     })?;
                 LoadedEngine::Moonshine(engine)
+            }
+            EngineType::Voxtral => {
+                // Cloud engines are handled above and return early
+                unreachable!("Voxtral cloud engine should be handled before this point")
             }
         };
 
@@ -378,7 +443,57 @@ impl TranscriptionManager {
         // Get current settings for configuration
         let settings = get_settings(&self.app_handle);
 
-        // Perform transcription with the appropriate engine
+        // Check if this is a Voxtral cloud engine — handle outside the mutex
+        let is_voxtral = {
+            let engine_guard = self.engine.lock().unwrap();
+            matches!(engine_guard.as_ref(), Some(LoadedEngine::Voxtral(_)))
+        };
+
+        if is_voxtral {
+            // For cloud engines, get the API key and run async transcription outside the lock
+            let api_key = {
+                let engine_guard = self.engine.lock().unwrap();
+                match engine_guard.as_ref() {
+                    Some(LoadedEngine::Voxtral(v)) => v.api_key().to_string(),
+                    _ => return Err(anyhow::anyhow!("Expected Voxtral engine")),
+                }
+            };
+
+            let voxtral = VoxtralEngine::new(api_key);
+            let handle = tokio::runtime::Handle::current();
+            let voxtral_text = std::thread::spawn(move || handle.block_on(voxtral.transcribe(audio)))
+                .join()
+                .map_err(|_| anyhow::anyhow!("Voxtral transcription thread panicked"))?
+                .map_err(|e| anyhow::anyhow!("Voxtral transcription failed: {}", e))?;
+
+            let corrected_result = if !settings.custom_words.is_empty() {
+                apply_custom_words(
+                    &voxtral_text,
+                    &settings.custom_words,
+                    settings.word_correction_threshold,
+                )
+            } else {
+                voxtral_text
+            };
+
+            let filtered_result = filter_transcription_output(&corrected_result);
+
+            let et = std::time::Instant::now();
+            info!(
+                "Voxtral transcription completed in {}ms",
+                (et - st).as_millis()
+            );
+
+            if filtered_result.is_empty() {
+                info!("Transcription result is empty");
+            } else {
+                info!("Transcription result: {}", filtered_result);
+            }
+
+            return Ok(filtered_result);
+        }
+
+        // Perform transcription with local engines
         let result = {
             let mut engine_guard = self.engine.lock().unwrap();
             let engine = engine_guard.as_mut().ok_or_else(|| {
@@ -426,6 +541,9 @@ impl TranscriptionManager {
                 LoadedEngine::Moonshine(moonshine_engine) => moonshine_engine
                     .transcribe_samples(audio, None)
                     .map_err(|e| anyhow::anyhow!("Moonshine transcription failed: {}", e))?,
+                LoadedEngine::Voxtral(_) => {
+                    unreachable!("Voxtral is handled above")
+                }
             }
         };
 

@@ -61,6 +61,24 @@ pub async fn set_active_model(
         return Err(format!("Model not downloaded: {}", model_id));
     }
 
+    // For cloud models, save the selection first so the user can configure
+    // the API key in settings before the engine needs to load.
+    if model_info.is_cloud {
+        // Unload any currently loaded local model
+        let _ = transcription_manager.unload_model();
+
+        // Update settings to select this cloud model
+        let mut settings = get_settings(&app_handle);
+        settings.selected_model = model_id.clone();
+        write_settings(&app_handle, settings);
+
+        // Try loading — if API key is missing this will fail, but the model
+        // is already selected so the user can enter the key and retry.
+        let _ = transcription_manager.load_model(&model_id);
+
+        return Ok(());
+    }
+
     // Load the model in the transcription manager
     transcription_manager
         .load_model(&model_id)
@@ -105,7 +123,8 @@ pub async fn has_any_models_available(
     model_manager: State<'_, Arc<ModelManager>>,
 ) -> Result<bool, String> {
     let models = model_manager.get_available_models();
-    Ok(models.iter().any(|m| m.is_downloaded))
+    // Exclude cloud models so onboarding still prompts for local model download
+    Ok(models.iter().any(|m| m.is_downloaded && !m.is_cloud))
 }
 
 #[tauri::command]
@@ -114,8 +133,8 @@ pub async fn has_any_models_or_downloads(
     model_manager: State<'_, Arc<ModelManager>>,
 ) -> Result<bool, String> {
     let models = model_manager.get_available_models();
-    // Return true if any models are downloaded OR if any downloads are in progress
-    Ok(models.iter().any(|m| m.is_downloaded))
+    // Exclude cloud models so onboarding still prompts for local model download
+    Ok(models.iter().any(|m| m.is_downloaded && !m.is_cloud))
 }
 
 #[tauri::command]

@@ -52,6 +52,10 @@
       "moonshine-base": {
         "name": "Moonshine Base",
         "description": "Very fast, English only. Handles accents well."
+      },
+      "voxtral-mini-realtime": {
+        "name": "Voxtral Mini Realtime",
+        "description": "Dựa trên đám mây. Nhanh và chính xác, cần khóa API Mistral."
       }
     },
     "errors": {
@@ -96,7 +100,8 @@
     "modelError": "Lỗi Mô Hình",
     "modelUnloaded": "Mô Hình Đã Gỡ",
     "noModelDownloadRequired": "Chưa Có Mô Hình - Cần Tải Xuống",
-    "deleteModel": "Xóa {{modelName}}"
+    "deleteModel": "Xóa {{modelName}}",
+    "cloud": "Đám mây"
   },
   "settings": {
     "general": {
@@ -135,6 +140,12 @@
       "pushToTalk": {
         "label": "Nhấn để nói",
         "description": "Giữ để ghi âm, thả để dừng"
+      },
+      "cloudTranscription": "Chuyển đổi đám mây",
+      "mistralApiKey": {
+        "title": "Khóa API Mistral",
+        "description": "Cần thiết cho chuyển đổi đám mây Voxtral. Lấy tại console.mistral.ai",
+        "placeholder": "Nhập khóa API Mistral của bạn..."
       }
     },
     "sound": {

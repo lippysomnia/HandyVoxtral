@@ -113,12 +113,17 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {model.is_cloud && (
+                    <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
+                      {t("modelSelector.cloud")}
+                    </span>
+                  )}
                   {currentModelId === model.id && (
                     <div className="text-xs text-logo-primary">
                       {t("modelSelector.active")}
                     </div>
                   )}
-                  {currentModelId !== model.id && (
+                  {currentModelId !== model.id && !model.is_cloud && (
                     <button
                       onClick={(e) => handleDeleteClick(e, model.id)}
                       className="text-red-400 hover:text-red-300 p-1 hover:bg-red-500/10 rounded transition-colors"

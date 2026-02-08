@@ -317,6 +317,8 @@ pub struct AppSettings {
     pub keyboard_implementation: KeyboardImplementation,
     #[serde(default = "default_paste_delay_ms")]
     pub paste_delay_ms: u64,
+    #[serde(default)]
+    pub mistral_api_key: String,
 }
 
 fn default_model() -> String {
@@ -632,6 +634,7 @@ pub fn get_default_settings() -> AppSettings {
         experimental_enabled: false,
         keyboard_implementation: KeyboardImplementation::default(),
         paste_delay_ms: default_paste_delay_ms(),
+        mistral_api_key: String::new(),
     }
 }
 
