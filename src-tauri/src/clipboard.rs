@@ -434,7 +434,7 @@ fn send_key_combo_via_xdotool(paste_method: &PasteMethod) -> Result<(), String> 
 }
 
 /// Types text directly by simulating individual key presses.
-fn paste_direct(enigo: &mut Enigo, text: &str) -> Result<(), String> {
+pub fn paste_direct(enigo: &mut Enigo, text: &str) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
         if try_direct_typing_linux(text)? {

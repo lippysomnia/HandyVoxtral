@@ -1,7 +1,6 @@
 use crate::audio_toolkit::{apply_custom_words, filter_transcription_output};
 use crate::managers::model::{EngineType, ModelManager};
 use crate::managers::voxtral::VoxtralEngine;
-use crate::managers::voxtral_streaming::VoxtralStreamingSession;
 use crate::settings::{get_settings, ModelUnloadTimeout};
 use anyhow::Result;
 use log::{debug, error, info, warn};
@@ -601,25 +600,6 @@ impl TranscriptionManager {
     /// Get the Mistral API key from settings
     pub fn get_mistral_api_key(&self) -> String {
         get_settings(&self.app_handle).mistral_api_key.clone()
-    }
-
-    /// Finalize a streaming transcription — await result, apply word correction and filtering
-    pub async fn finalize_streaming_transcription(
-        &self,
-        session: VoxtralStreamingSession,
-    ) -> Result<String> {
-        let raw_text = session.await_result().await?;
-        let settings = get_settings(&self.app_handle);
-        let corrected = if !settings.custom_words.is_empty() {
-            apply_custom_words(
-                &raw_text,
-                &settings.custom_words,
-                settings.word_correction_threshold,
-            )
-        } else {
-            raw_text
-        };
-        Ok(filter_transcription_output(&corrected))
     }
 }
 

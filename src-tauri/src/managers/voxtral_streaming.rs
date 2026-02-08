@@ -19,9 +19,15 @@ pub enum StreamingAudioMsg {
     Cancel,
 }
 
+pub enum StreamingTextEvent {
+    Delta(String),
+    Done,
+}
+
 pub struct VoxtralStreamingSession {
     audio_tx: mpsc::UnboundedSender<StreamingAudioMsg>,
     result_rx: Option<oneshot::Receiver<Result<String>>>,
+    text_rx: Option<mpsc::UnboundedReceiver<StreamingTextEvent>>,
     task_handle: Option<tauri::async_runtime::JoinHandle<()>>,
 }
 
@@ -29,12 +35,15 @@ impl VoxtralStreamingSession {
     pub fn start(api_key: String) -> Result<Self> {
         let (audio_tx, audio_rx) = mpsc::unbounded_channel::<StreamingAudioMsg>();
         let (result_tx, result_rx) = oneshot::channel::<Result<String>>();
+        let (text_tx, text_rx) = mpsc::unbounded_channel::<StreamingTextEvent>();
 
-        let task_handle = tauri::async_runtime::spawn(Self::run(api_key, audio_rx, result_tx));
+        let task_handle =
+            tauri::async_runtime::spawn(Self::run(api_key, audio_rx, result_tx, text_tx));
 
         Ok(Self {
             audio_tx,
             result_rx: Some(result_rx),
+            text_rx: Some(text_rx),
             task_handle: Some(task_handle),
         })
     }
@@ -43,14 +52,16 @@ impl VoxtralStreamingSession {
         api_key: String,
         mut audio_rx: mpsc::UnboundedReceiver<StreamingAudioMsg>,
         result_tx: oneshot::Sender<Result<String>>,
+        text_tx: mpsc::UnboundedSender<StreamingTextEvent>,
     ) {
-        let result = Self::run_inner(&api_key, &mut audio_rx).await;
+        let result = Self::run_inner(&api_key, &mut audio_rx, &text_tx).await;
         let _ = result_tx.send(result);
     }
 
     async fn run_inner(
         api_key: &str,
         audio_rx: &mut mpsc::UnboundedReceiver<StreamingAudioMsg>,
+        text_tx: &mpsc::UnboundedSender<StreamingTextEvent>,
     ) -> Result<String> {
         // Build WebSocket request with auth header
         let mut request = VOXTRAL_WS_URL.into_client_request()?;
@@ -160,12 +171,14 @@ impl VoxtralStreamingSession {
                                 Some("transcription.text.delta") => {
                                     if let Some(delta) = json["text"].as_str() {
                                         full_text.push_str(delta);
+                                        let _ = text_tx.send(StreamingTextEvent::Delta(delta.to_string()));
                                     }
                                 }
                                 Some("transcription.done") => {
                                     if let Some(final_text) = json["text"].as_str() {
                                         full_text = final_text.to_string();
                                     }
+                                    let _ = text_tx.send(StreamingTextEvent::Done);
                                     info!("Voxtral streaming: transcription complete");
                                     break;
                                 }
@@ -206,6 +219,10 @@ impl VoxtralStreamingSession {
 
     pub fn audio_sender(&self) -> mpsc::UnboundedSender<StreamingAudioMsg> {
         self.audio_tx.clone()
+    }
+
+    pub fn take_text_receiver(&mut self) -> Option<mpsc::UnboundedReceiver<StreamingTextEvent>> {
+        self.text_rx.take()
     }
 
     pub fn send_end(&self) {

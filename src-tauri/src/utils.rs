@@ -29,6 +29,9 @@ pub fn cancel_current_operation(app: &AppHandle) {
         warn!("Failed to lock toggle state manager during cancellation");
     }
 
+    // Clear realtime typing flag
+    crate::actions::REALTIME_TYPING_ACTIVE.store(false, std::sync::atomic::Ordering::Relaxed);
+
     // Cancel any ongoing recording (streaming or batch)
     let audio_manager = app.state::<Arc<AudioRecordingManager>>();
     audio_manager.cancel_streaming_recording();

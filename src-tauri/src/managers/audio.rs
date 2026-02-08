@@ -451,10 +451,16 @@ impl AudioRecordingManager {
         &self,
         binding_id: &str,
         api_key: String,
-    ) -> Result<bool, anyhow::Error> {
+    ) -> Result<
+        Option<tokio::sync::mpsc::UnboundedReceiver<crate::managers::voxtral_streaming::StreamingTextEvent>>,
+        anyhow::Error,
+    > {
         use crate::managers::voxtral_streaming::StreamingAudioMsg;
 
-        let session = VoxtralStreamingSession::start(api_key)?;
+        let mut session = VoxtralStreamingSession::start(api_key)?;
+
+        // Take the text event receiver before storing the session
+        let text_rx = session.take_text_receiver();
 
         // Clone the channel sender for the callback — this avoids wrapping the session in Arc
         let audio_tx = session.audio_sender();
@@ -478,9 +484,10 @@ impl AudioRecordingManager {
             if let Some(session) = self.streaming_session.lock().unwrap().take() {
                 session.cancel();
             }
+            return Ok(None);
         }
 
-        Ok(started)
+        Ok(text_rx)
     }
 
     pub fn stop_streaming_recording(

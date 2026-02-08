@@ -1,10 +1,13 @@
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 use crate::apple_intelligence;
 use crate::audio_feedback::{play_feedback_sound, play_feedback_sound_blocking, SoundType};
+use crate::clipboard::paste_direct;
+use crate::input::EnigoState;
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::history::HistoryManager;
 use crate::managers::transcription::TranscriptionManager;
-use crate::settings::{get_settings, AppSettings, APPLE_INTELLIGENCE_PROVIDER_ID};
+use crate::managers::voxtral_streaming::StreamingTextEvent;
+use crate::settings::{get_settings, AppSettings, PasteMethod, APPLE_INTELLIGENCE_PROVIDER_ID};
 use crate::shortcut;
 use crate::tray::{change_tray_icon, TrayIconState};
 use crate::utils::{self, show_recording_overlay, show_transcribing_overlay};
@@ -13,10 +16,15 @@ use ferrous_opencc::{config::BuiltinConfig, OpenCC};
 use log::{debug, error};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use tauri::AppHandle;
 use tauri::Manager;
+
+/// Flag indicating that realtime text typing is active (Voxtral + Direct mode).
+/// When set, stop() skips the bulk paste since text was already typed as it arrived.
+pub static REALTIME_TYPING_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 // Shortcut Action Trait
 pub trait ShortcutAction: Send + Sync {
@@ -236,56 +244,57 @@ impl ShortcutAction for TranscribeAction {
 
         let mut recording_started = false;
 
-        // Helper: start the right kind of recording (streaming for Voxtral, normal for local)
-        let try_start = |rm: &AudioRecordingManager, binding_id: &str| -> bool {
+        // Start the right kind of recording (streaming for Voxtral, normal for local)
+        // For Voxtral, also captures the text receiver for realtime typing
+        let start_recording = |rm: &AudioRecordingManager, binding_id: &str| -> (bool, Option<tokio::sync::mpsc::UnboundedReceiver<StreamingTextEvent>>) {
             if is_voxtral {
                 let api_key = tm.get_mistral_api_key();
                 if api_key.trim().is_empty() {
                     error!("Mistral API key is empty — cannot start streaming recording");
-                    return false;
+                    return (false, None);
                 }
                 match rm.start_streaming_recording(binding_id, api_key) {
-                    Ok(started) => started,
+                    Ok(text_rx) => (text_rx.is_some(), text_rx),
                     Err(e) => {
                         error!("Failed to start streaming recording: {}", e);
-                        false
+                        (false, None)
                     }
                 }
             } else {
-                rm.try_start_recording(binding_id)
+                (rm.try_start_recording(binding_id), None)
             }
         };
+
+        let mut text_rx = None;
 
         if is_always_on {
             // Always-on mode: Play audio feedback immediately, then apply mute after sound finishes
             debug!("Always-on mode: Playing audio feedback immediately");
             let rm_clone = Arc::clone(&rm);
             let app_clone = app.clone();
-            // The blocking helper exits immediately if audio feedback is disabled,
-            // so we can always reuse this thread to ensure mute happens right after playback.
             std::thread::spawn(move || {
                 play_feedback_sound_blocking(&app_clone, SoundType::Start);
                 rm_clone.apply_mute();
             });
 
-            recording_started = try_start(&rm, &binding_id);
+            let (started, rx) = start_recording(&rm, &binding_id);
+            recording_started = started;
+            text_rx = rx;
             debug!("Recording started: {}", recording_started);
         } else {
             // On-demand mode: Start recording first, then play audio feedback, then apply mute
-            // This allows the microphone to be activated before playing the sound
             debug!("On-demand mode: Starting recording first, then audio feedback");
             let recording_start_time = Instant::now();
-            if try_start(&rm, &binding_id) {
+            let (started, rx) = start_recording(&rm, &binding_id);
+            if started {
                 recording_started = true;
+                text_rx = rx;
                 debug!("Recording started in {:?}", recording_start_time.elapsed());
-                // Small delay to ensure microphone stream is active
                 let app_clone = app.clone();
                 let rm_clone = Arc::clone(&rm);
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(100));
                     debug!("Handling delayed audio feedback/mute sequence");
-                    // Helper handles disabled audio feedback by returning early, so we reuse it
-                    // to keep mute sequencing consistent in every mode.
                     play_feedback_sound_blocking(&app_clone, SoundType::Start);
                     rm_clone.apply_mute();
                 });
@@ -295,8 +304,37 @@ impl ShortcutAction for TranscribeAction {
         }
 
         if recording_started {
-            // Dynamically register the cancel shortcut in a separate task to avoid deadlock
             shortcut::register_cancel_shortcut(app);
+
+            // If Voxtral + Direct mode: spawn a realtime typing task that types deltas as they arrive
+            let is_direct = matches!(settings.paste_method, PasteMethod::Direct);
+            if is_voxtral && is_direct {
+                if let Some(mut rx) = text_rx {
+                    REALTIME_TYPING_ACTIVE.store(true, Ordering::Relaxed);
+                    let app_for_typing = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        debug!("Realtime typing task started");
+                        while let Some(event) = rx.recv().await {
+                            match event {
+                                StreamingTextEvent::Delta(delta) => {
+                                    if let Some(enigo_state) = app_for_typing.try_state::<EnigoState>() {
+                                        if let Ok(mut enigo) = enigo_state.0.lock() {
+                                            if let Err(e) = paste_direct(&mut enigo, &delta) {
+                                                error!("Realtime typing error: {}", e);
+                                            }
+                                        }
+                                    }
+                                }
+                                StreamingTextEvent::Done => {
+                                    debug!("Realtime typing: received done signal");
+                                    break;
+                                }
+                            }
+                        }
+                        debug!("Realtime typing task finished");
+                    });
+                }
+            }
         }
 
         debug!(
@@ -339,20 +377,22 @@ impl ShortcutAction for TranscribeAction {
                 binding_id
             );
 
+            let was_realtime = REALTIME_TYPING_ACTIVE.swap(false, Ordering::Relaxed);
+
             // Get the transcription text — either from streaming or batch
             let transcription_result: Result<(String, Option<Vec<f32>>), String> =
                 if let Some(session) = streaming_session {
                     // Streaming path: result comes from the WebSocket session
-                    debug!("Using streaming transcription path");
+                    debug!("Using streaming transcription path (realtime_typed={})", was_realtime);
                     let transcription_time = Instant::now();
-                    match tm.finalize_streaming_transcription(session).await {
+                    match session.await_result().await {
                         Ok(text) => {
                             debug!(
                                 "Streaming transcription completed in {:?}: '{}'",
                                 transcription_time.elapsed(),
                                 text
                             );
-                            Ok((text, None)) // No local samples for history in streaming mode
+                            Ok((text, None))
                         }
                         Err(e) => Err(format!("Streaming transcription error: {}", e)),
                     }
@@ -387,7 +427,8 @@ impl ShortcutAction for TranscribeAction {
 
             match transcription_result {
                 Ok((transcription, samples_for_history)) => {
-                    if !transcription.is_empty() {
+                    if !transcription.is_empty() && !was_realtime {
+                        // Text was NOT already typed in realtime — do full post-processing + paste
                         let settings = get_settings(&ah);
                         let mut final_text = transcription.clone();
                         let mut post_processed_text: Option<String> = None;
@@ -410,7 +451,6 @@ impl ShortcutAction for TranscribeAction {
                             post_processed_text = Some(processed_text.clone());
                             final_text = processed_text;
 
-                            // Get the prompt that was used
                             if let Some(prompt_id) = &settings.post_process_selected_prompt_id {
                                 if let Some(prompt) = settings
                                     .post_process_prompts
@@ -421,7 +461,6 @@ impl ShortcutAction for TranscribeAction {
                                 }
                             }
                         } else if final_text != transcription {
-                            // Chinese conversion was applied but no LLM post-processing
                             post_processed_text = Some(final_text.clone());
                         }
 
@@ -464,6 +503,10 @@ impl ShortcutAction for TranscribeAction {
                             change_tray_icon(&ah, TrayIconState::Idle);
                         });
                     } else {
+                        // Either empty transcription or text was already typed in realtime
+                        if was_realtime {
+                            debug!("Realtime typing complete — skipping bulk paste");
+                        }
                         utils::hide_recording_overlay(&ah);
                         change_tray_icon(&ah, TrayIconState::Idle);
                     }
