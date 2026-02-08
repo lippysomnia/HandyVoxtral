@@ -22,12 +22,15 @@ enum Cmd {
     Shutdown,
 }
 
+type ChunkCallback = Arc<Mutex<Option<Arc<dyn Fn(Vec<f32>) + Send + Sync + 'static>>>>;
+
 pub struct AudioRecorder {
     device: Option<Device>,
     cmd_tx: Option<mpsc::Sender<Cmd>>,
     worker_handle: Option<std::thread::JoinHandle<()>>,
     vad: Option<Arc<Mutex<Box<dyn vad::VoiceActivityDetector>>>>,
     level_cb: Option<Arc<dyn Fn(Vec<f32>) + Send + Sync + 'static>>,
+    chunk_cb: ChunkCallback,
 }
 
 impl AudioRecorder {
@@ -38,6 +41,7 @@ impl AudioRecorder {
             worker_handle: None,
             vad: None,
             level_cb: None,
+            chunk_cb: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -52,6 +56,13 @@ impl AudioRecorder {
     {
         self.level_cb = Some(Arc::new(cb));
         self
+    }
+
+    pub fn set_chunk_callback(
+        &self,
+        cb: Option<Arc<dyn Fn(Vec<f32>) + Send + Sync + 'static>>,
+    ) {
+        *self.chunk_cb.lock().unwrap() = cb;
     }
 
     pub fn open(&mut self, device: Option<Device>) -> Result<(), Box<dyn std::error::Error>> {
@@ -74,6 +85,7 @@ impl AudioRecorder {
         let vad = self.vad.clone();
         // Move the optional level callback into the worker thread
         let level_cb = self.level_cb.clone();
+        let chunk_cb = self.chunk_cb.clone();
 
         let worker = std::thread::spawn(move || {
             let config = AudioRecorder::get_preferred_config(&thread_device)
@@ -117,7 +129,7 @@ impl AudioRecorder {
             stream.play().expect("failed to start stream");
 
             // keep the stream alive while we process samples
-            run_consumer(sample_rate, vad, sample_rx, cmd_rx, level_cb);
+            run_consumer(sample_rate, vad, sample_rx, cmd_rx, level_cb, chunk_cb);
             // stream is dropped here, after run_consumer returns
         });
 
@@ -245,6 +257,7 @@ fn run_consumer(
     sample_rx: mpsc::Receiver<Vec<f32>>,
     cmd_rx: mpsc::Receiver<Cmd>,
     level_cb: Option<Arc<dyn Fn(Vec<f32>) + Send + Sync + 'static>>,
+    chunk_cb: ChunkCallback,
 ) {
     let mut frame_resampler = FrameResampler::new(
         in_sample_rate as usize,
@@ -301,9 +314,18 @@ fn run_consumer(
         }
 
         // ---------- existing pipeline ------------------------------------ //
+        let before_len = processed_samples.len();
         frame_resampler.push(&raw, &mut |frame: &[f32]| {
             handle_frame(frame, recording, &vad, &mut processed_samples)
         });
+        let new_len = processed_samples.len();
+        if new_len > before_len {
+            if let Ok(guard) = chunk_cb.try_lock() {
+                if let Some(cb) = guard.as_ref() {
+                    cb(processed_samples[before_len..new_len].to_vec());
+                }
+            }
+        }
 
         // non-blocking check for a command
         while let Ok(cmd) = cmd_rx.try_recv() {

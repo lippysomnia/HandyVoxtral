@@ -217,6 +217,9 @@ impl ShortcutAction for TranscribeAction {
         let tm = app.state::<Arc<TranscriptionManager>>();
         tm.initiate_model_load();
 
+        // Check if the selected model is Voxtral *before* recording starts
+        let is_voxtral = tm.is_selected_model_voxtral();
+
         let binding_id = binding_id.to_string();
         change_tray_icon(app, TrayIconState::Recording);
         show_recording_overlay(app);
@@ -226,9 +229,33 @@ impl ShortcutAction for TranscribeAction {
         // Get the microphone mode to determine audio feedback timing
         let settings = get_settings(app);
         let is_always_on = settings.always_on_microphone;
-        debug!("Microphone mode - always_on: {}", is_always_on);
+        debug!(
+            "Microphone mode - always_on: {}, voxtral_streaming: {}",
+            is_always_on, is_voxtral
+        );
 
         let mut recording_started = false;
+
+        // Helper: start the right kind of recording (streaming for Voxtral, normal for local)
+        let try_start = |rm: &AudioRecordingManager, binding_id: &str| -> bool {
+            if is_voxtral {
+                let api_key = tm.get_mistral_api_key();
+                if api_key.trim().is_empty() {
+                    error!("Mistral API key is empty — cannot start streaming recording");
+                    return false;
+                }
+                match rm.start_streaming_recording(binding_id, api_key) {
+                    Ok(started) => started,
+                    Err(e) => {
+                        error!("Failed to start streaming recording: {}", e);
+                        false
+                    }
+                }
+            } else {
+                rm.try_start_recording(binding_id)
+            }
+        };
+
         if is_always_on {
             // Always-on mode: Play audio feedback immediately, then apply mute after sound finishes
             debug!("Always-on mode: Playing audio feedback immediately");
@@ -241,14 +268,14 @@ impl ShortcutAction for TranscribeAction {
                 rm_clone.apply_mute();
             });
 
-            recording_started = rm.try_start_recording(&binding_id);
+            recording_started = try_start(&rm, &binding_id);
             debug!("Recording started: {}", recording_started);
         } else {
             // On-demand mode: Start recording first, then play audio feedback, then apply mute
             // This allows the microphone to be activated before playing the sound
             debug!("On-demand mode: Starting recording first, then audio feedback");
             let recording_start_time = Instant::now();
-            if rm.try_start_recording(&binding_id) {
+            if try_start(&rm, &binding_id) {
                 recording_started = true;
                 debug!("Recording started in {:?}", recording_start_time.elapsed());
                 // Small delay to ensure microphone stream is active
@@ -302,70 +329,104 @@ impl ShortcutAction for TranscribeAction {
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
         let post_process = self.post_process;
 
+        // Check if this is a streaming (Voxtral) recording
+        let streaming_session = rm.stop_streaming_recording(&binding_id);
+
         tauri::async_runtime::spawn(async move {
-            let binding_id = binding_id.clone(); // Clone for the inner async task
+            let binding_id = binding_id.clone();
             debug!(
                 "Starting async transcription task for binding: {}",
                 binding_id
             );
 
-            let stop_recording_time = Instant::now();
-            if let Some(samples) = rm.stop_recording(&binding_id) {
-                debug!(
-                    "Recording stopped and samples retrieved in {:?}, sample count: {}",
-                    stop_recording_time.elapsed(),
-                    samples.len()
-                );
-
-                let transcription_time = Instant::now();
-                let samples_clone = samples.clone(); // Clone for history saving
-                match tm.transcribe(samples) {
-                    Ok(transcription) => {
+            // Get the transcription text — either from streaming or batch
+            let transcription_result: Result<(String, Option<Vec<f32>>), String> =
+                if let Some(session) = streaming_session {
+                    // Streaming path: result comes from the WebSocket session
+                    debug!("Using streaming transcription path");
+                    let transcription_time = Instant::now();
+                    match tm.finalize_streaming_transcription(session).await {
+                        Ok(text) => {
+                            debug!(
+                                "Streaming transcription completed in {:?}: '{}'",
+                                transcription_time.elapsed(),
+                                text
+                            );
+                            Ok((text, None)) // No local samples for history in streaming mode
+                        }
+                        Err(e) => Err(format!("Streaming transcription error: {}", e)),
+                    }
+                } else {
+                    // Batch path: stop recording and transcribe locally
+                    debug!("Using batch transcription path");
+                    let stop_recording_time = Instant::now();
+                    if let Some(samples) = rm.stop_recording(&binding_id) {
                         debug!(
-                            "Transcription completed in {:?}: '{}'",
-                            transcription_time.elapsed(),
-                            transcription
+                            "Recording stopped and samples retrieved in {:?}, sample count: {}",
+                            stop_recording_time.elapsed(),
+                            samples.len()
                         );
-                        if !transcription.is_empty() {
-                            let settings = get_settings(&ah);
-                            let mut final_text = transcription.clone();
-                            let mut post_processed_text: Option<String> = None;
-                            let mut post_process_prompt: Option<String> = None;
-
-                            // First, check if Chinese variant conversion is needed
-                            if let Some(converted_text) =
-                                maybe_convert_chinese_variant(&settings, &transcription).await
-                            {
-                                final_text = converted_text;
+                        let transcription_time = Instant::now();
+                        let samples_clone = samples.clone();
+                        match tm.transcribe(samples) {
+                            Ok(text) => {
+                                debug!(
+                                    "Transcription completed in {:?}: '{}'",
+                                    transcription_time.elapsed(),
+                                    text
+                                );
+                                Ok((text, Some(samples_clone)))
                             }
+                            Err(e) => Err(format!("Transcription error: {}", e)),
+                        }
+                    } else {
+                        debug!("No samples retrieved from recording stop");
+                        Err("No samples".to_string())
+                    }
+                };
 
-                            // Then apply LLM post-processing if this is the post-process hotkey
-                            // Uses final_text which may already have Chinese conversion applied
-                            let processed = if post_process {
-                                post_process_transcription(&settings, &final_text).await
-                            } else {
-                                None
-                            };
-                            if let Some(processed_text) = processed {
-                                post_processed_text = Some(processed_text.clone());
-                                final_text = processed_text;
+            match transcription_result {
+                Ok((transcription, samples_for_history)) => {
+                    if !transcription.is_empty() {
+                        let settings = get_settings(&ah);
+                        let mut final_text = transcription.clone();
+                        let mut post_processed_text: Option<String> = None;
+                        let mut post_process_prompt: Option<String> = None;
 
-                                // Get the prompt that was used
-                                if let Some(prompt_id) = &settings.post_process_selected_prompt_id {
-                                    if let Some(prompt) = settings
-                                        .post_process_prompts
-                                        .iter()
-                                        .find(|p| &p.id == prompt_id)
-                                    {
-                                        post_process_prompt = Some(prompt.prompt.clone());
-                                    }
+                        // First, check if Chinese variant conversion is needed
+                        if let Some(converted_text) =
+                            maybe_convert_chinese_variant(&settings, &transcription).await
+                        {
+                            final_text = converted_text;
+                        }
+
+                        // Then apply LLM post-processing if this is the post-process hotkey
+                        let processed = if post_process {
+                            post_process_transcription(&settings, &final_text).await
+                        } else {
+                            None
+                        };
+                        if let Some(processed_text) = processed {
+                            post_processed_text = Some(processed_text.clone());
+                            final_text = processed_text;
+
+                            // Get the prompt that was used
+                            if let Some(prompt_id) = &settings.post_process_selected_prompt_id {
+                                if let Some(prompt) = settings
+                                    .post_process_prompts
+                                    .iter()
+                                    .find(|p| &p.id == prompt_id)
+                                {
+                                    post_process_prompt = Some(prompt.prompt.clone());
                                 }
-                            } else if final_text != transcription {
-                                // Chinese conversion was applied but no LLM post-processing
-                                post_processed_text = Some(final_text.clone());
                             }
+                        } else if final_text != transcription {
+                            // Chinese conversion was applied but no LLM post-processing
+                            post_processed_text = Some(final_text.clone());
+                        }
 
-                            // Save to history with post-processed text and prompt
+                        // Save to history (only if we have local samples)
+                        if let Some(samples_clone) = samples_for_history {
                             let hm_clone = Arc::clone(&hm);
                             let transcription_for_history = transcription.clone();
                             tauri::async_runtime::spawn(async move {
@@ -373,50 +434,45 @@ impl ShortcutAction for TranscribeAction {
                                     .save_transcription(
                                         samples_clone,
                                         transcription_for_history,
-                                        post_processed_text,
-                                        post_process_prompt,
+                                        post_processed_text.clone(),
+                                        post_process_prompt.clone(),
                                     )
                                     .await
                                 {
                                     error!("Failed to save transcription to history: {}", e);
                                 }
                             });
+                        }
 
-                            // Paste the final text (either processed or original)
-                            let ah_clone = ah.clone();
-                            let paste_time = Instant::now();
-                            ah.run_on_main_thread(move || {
-                                match utils::paste(final_text, ah_clone.clone()) {
-                                    Ok(()) => debug!(
-                                        "Text pasted successfully in {:?}",
-                                        paste_time.elapsed()
-                                    ),
-                                    Err(e) => error!("Failed to paste transcription: {}", e),
-                                }
-                                // Hide the overlay after transcription is complete
-                                utils::hide_recording_overlay(&ah_clone);
-                                change_tray_icon(&ah_clone, TrayIconState::Idle);
-                            })
-                            .unwrap_or_else(|e| {
-                                error!("Failed to run paste on main thread: {:?}", e);
-                                utils::hide_recording_overlay(&ah);
-                                change_tray_icon(&ah, TrayIconState::Idle);
-                            });
-                        } else {
+                        // Paste the final text
+                        let ah_clone = ah.clone();
+                        let paste_time = Instant::now();
+                        ah.run_on_main_thread(move || {
+                            match utils::paste(final_text, ah_clone.clone()) {
+                                Ok(()) => debug!(
+                                    "Text pasted successfully in {:?}",
+                                    paste_time.elapsed()
+                                ),
+                                Err(e) => error!("Failed to paste transcription: {}", e),
+                            }
+                            utils::hide_recording_overlay(&ah_clone);
+                            change_tray_icon(&ah_clone, TrayIconState::Idle);
+                        })
+                        .unwrap_or_else(|e| {
+                            error!("Failed to run paste on main thread: {:?}", e);
                             utils::hide_recording_overlay(&ah);
                             change_tray_icon(&ah, TrayIconState::Idle);
-                        }
-                    }
-                    Err(err) => {
-                        debug!("Global Shortcut Transcription error: {}", err);
+                        });
+                    } else {
                         utils::hide_recording_overlay(&ah);
                         change_tray_icon(&ah, TrayIconState::Idle);
                     }
                 }
-            } else {
-                debug!("No samples retrieved from recording stop");
-                utils::hide_recording_overlay(&ah);
-                change_tray_icon(&ah, TrayIconState::Idle);
+                Err(err) => {
+                    debug!("Transcription error: {}", err);
+                    utils::hide_recording_overlay(&ah);
+                    change_tray_icon(&ah, TrayIconState::Idle);
+                }
             }
 
             // Clear toggle state now that transcription is complete

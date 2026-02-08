@@ -1,5 +1,6 @@
 use crate::audio_toolkit::{list_input_devices, vad::SmoothedVad, AudioRecorder, SileroVad};
 use crate::helpers::clamshell;
+use crate::managers::voxtral_streaming::VoxtralStreamingSession;
 use crate::settings::{get_settings, AppSettings};
 use crate::utils;
 use log::{debug, error, info};
@@ -149,6 +150,7 @@ pub struct AudioRecordingManager {
     is_open: Arc<Mutex<bool>>,
     is_recording: Arc<Mutex<bool>>,
     did_mute: Arc<Mutex<bool>>,
+    streaming_session: Arc<Mutex<Option<VoxtralStreamingSession>>>,
 }
 
 impl AudioRecordingManager {
@@ -171,6 +173,7 @@ impl AudioRecordingManager {
             is_open: Arc::new(Mutex::new(false)),
             is_recording: Arc::new(Mutex::new(false)),
             did_mute: Arc::new(Mutex::new(false)),
+            streaming_session: Arc::new(Mutex::new(None)),
         };
 
         // Always-on?  Open immediately.
@@ -440,5 +443,100 @@ impl AudioRecordingManager {
                 self.stop_microphone_stream();
             }
         }
+    }
+
+    /* ---------- streaming recording (Voxtral cloud) ----------------------- */
+
+    pub fn start_streaming_recording(
+        &self,
+        binding_id: &str,
+        api_key: String,
+    ) -> Result<bool, anyhow::Error> {
+        use crate::managers::voxtral_streaming::StreamingAudioMsg;
+
+        let session = VoxtralStreamingSession::start(api_key)?;
+
+        // Clone the channel sender for the callback — this avoids wrapping the session in Arc
+        let audio_tx = session.audio_sender();
+
+        if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
+            rec.set_chunk_callback(Some(Arc::new(move |samples: Vec<f32>| {
+                let _ = audio_tx.send(StreamingAudioMsg::AudioChunk(samples));
+            })));
+        }
+
+        *self.streaming_session.lock().unwrap() = Some(session);
+
+        // Start the actual recording
+        let started = self.try_start_recording(binding_id);
+
+        if !started {
+            // Clean up on failure
+            if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
+                rec.set_chunk_callback(None);
+            }
+            if let Some(session) = self.streaming_session.lock().unwrap().take() {
+                session.cancel();
+            }
+        }
+
+        Ok(started)
+    }
+
+    pub fn stop_streaming_recording(
+        &self,
+        binding_id: &str,
+    ) -> Option<VoxtralStreamingSession> {
+        // Clear chunk callback first so no more frames are sent
+        if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
+            rec.set_chunk_callback(None);
+        }
+
+        // Take the streaming session
+        let session = self.streaming_session.lock().unwrap().take();
+
+        if let Some(ref s) = session {
+            s.send_end();
+        }
+
+        // Stop the recorder and discard samples (they were already streamed)
+        let mut state = self.state.lock().unwrap();
+        match *state {
+            RecordingState::Recording {
+                binding_id: ref active,
+            } if active == binding_id => {
+                *state = RecordingState::Idle;
+                drop(state);
+
+                if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
+                    let _ = rec.stop(); // Discard samples
+                }
+
+                *self.is_recording.lock().unwrap() = false;
+
+                // In on-demand mode turn the mic off again
+                if matches!(*self.mode.lock().unwrap(), MicrophoneMode::OnDemand) {
+                    self.stop_microphone_stream();
+                }
+            }
+            _ => {}
+        }
+
+        session
+    }
+
+    pub fn cancel_streaming_recording(&self) {
+        // Clear chunk callback
+        if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
+            rec.set_chunk_callback(None);
+        }
+
+        // Cancel the streaming session if active
+        if let Some(session) = self.streaming_session.lock().unwrap().take() {
+            session.cancel();
+        }
+
+        // Delegate recorder cleanup to existing cancel
+        self.cancel_recording();
     }
 }

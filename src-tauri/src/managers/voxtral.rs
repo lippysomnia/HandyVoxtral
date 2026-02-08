@@ -162,7 +162,7 @@ impl VoxtralEngine {
     }
 }
 
-fn convert_f32_to_s16le(samples: &[f32]) -> Vec<u8> {
+pub(crate) fn convert_f32_to_s16le(samples: &[f32]) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(samples.len() * 2);
     for &sample in samples {
         let clamped = sample.clamp(-1.0, 1.0);
