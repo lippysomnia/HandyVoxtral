@@ -494,17 +494,19 @@ impl AudioRecordingManager {
         &self,
         binding_id: &str,
     ) -> Option<VoxtralStreamingSession> {
-        // Clear chunk callback first so no more frames are sent
+        // Take the streaming session — if None, this wasn't a streaming recording
+        let session = self.streaming_session.lock().unwrap().take();
+        let session = match session {
+            Some(s) => s,
+            None => return None, // Not a streaming recording — let the normal stop path handle it
+        };
+
+        // Clear chunk callback so no more frames are sent
         if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
             rec.set_chunk_callback(None);
         }
 
-        // Take the streaming session
-        let session = self.streaming_session.lock().unwrap().take();
-
-        if let Some(ref s) = session {
-            s.send_end();
-        }
+        session.send_end();
 
         // Stop the recorder and discard samples (they were already streamed)
         let mut state = self.state.lock().unwrap();
@@ -529,7 +531,7 @@ impl AudioRecordingManager {
             _ => {}
         }
 
-        session
+        Some(session)
     }
 
     pub fn cancel_streaming_recording(&self) {
