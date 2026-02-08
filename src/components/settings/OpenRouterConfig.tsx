@@ -9,8 +9,11 @@ export const OpenRouterConfig: React.FC = () => {
   const { t } = useTranslation();
   const { settings, isUpdatingKey } = useSettingsStore();
   // Track the last value persisted to the backend so optimistic local
-  // updates don't trick the blur handler into skipping the save.
-  const persistedModel = useRef(settings?.openrouter_model ?? "");
+  // updates in onChange don't trick the blur handler into skipping the save.
+  const persistedModel = useRef<string | null>(null);
+  if (persistedModel.current === null) {
+    persistedModel.current = settings?.openrouter_model ?? "";
+  }
 
   const handleApiKeyChange = async (value: string) => {
     const trimmed = value.trim();

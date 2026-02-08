@@ -20,10 +20,6 @@ impl VoxtralEngine {
         Self { api_key }
     }
 
-    pub fn api_key(&self) -> &str {
-        &self.api_key
-    }
-
     pub async fn transcribe(&self, audio: Vec<f32>) -> Result<String> {
         let pcm = convert_f32_to_s16le(&audio);
         debug!(
