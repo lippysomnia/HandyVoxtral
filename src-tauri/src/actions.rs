@@ -17,7 +17,7 @@ use log::{debug, error};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::AppHandle;
 use tauri::Manager;
@@ -25,6 +25,11 @@ use tauri::Manager;
 /// Flag indicating that realtime text typing is active (Voxtral + Direct mode).
 /// When set, stop() skips the bulk paste since text was already typed as it arrived.
 pub static REALTIME_TYPING_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+/// Tracks text that was already typed during realtime streaming, so stop() can
+/// type any remaining text from the final transcription.done message.
+static REALTIME_TYPED_TEXT: Lazy<Mutex<Option<Arc<Mutex<String>>>>> =
+    Lazy::new(|| Mutex::new(None));
 
 // Shortcut Action Trait
 pub trait ShortcutAction: Send + Sync {
@@ -311,6 +316,9 @@ impl ShortcutAction for TranscribeAction {
             if is_voxtral && is_direct {
                 if let Some(mut rx) = text_rx {
                     REALTIME_TYPING_ACTIVE.store(true, Ordering::Relaxed);
+                    let typed_text = Arc::new(Mutex::new(String::new()));
+                    let typed_text_for_task = Arc::clone(&typed_text);
+                    REALTIME_TYPED_TEXT.lock().unwrap().replace(Arc::clone(&typed_text));
                     let app_for_typing = app.clone();
                     tauri::async_runtime::spawn(async move {
                         debug!("Realtime typing task started");
@@ -321,6 +329,8 @@ impl ShortcutAction for TranscribeAction {
                                         if let Ok(mut enigo) = enigo_state.0.lock() {
                                             if let Err(e) = paste_direct(&mut enigo, &delta) {
                                                 error!("Realtime typing error: {}", e);
+                                            } else if let Ok(mut typed) = typed_text_for_task.lock() {
+                                                typed.push_str(&delta);
                                             }
                                         }
                                     }
@@ -504,8 +514,53 @@ impl ShortcutAction for TranscribeAction {
                         });
                     } else {
                         // Either empty transcription or text was already typed in realtime
-                        if was_realtime {
-                            debug!("Realtime typing complete — skipping bulk paste");
+                        if was_realtime && !transcription.is_empty() {
+                            // Type any remaining text that wasn't covered by realtime deltas
+                            let already_typed = REALTIME_TYPED_TEXT
+                                .lock()
+                                .unwrap()
+                                .take()
+                                .and_then(|arc| arc.lock().ok().map(|s| s.clone()))
+                                .unwrap_or_default();
+                            let final_text = transcription.trim();
+                            let already_trimmed = already_typed.trim();
+                            if final_text.len() > already_trimmed.len()
+                                && final_text.starts_with(already_trimmed)
+                            {
+                                let remaining =
+                                    final_text[already_trimmed.len()..].to_string();
+                                if !remaining.is_empty() {
+                                    debug!(
+                                        "Realtime typing: appending remaining text: '{}'",
+                                        remaining
+                                    );
+                                    let ah_clone = ah.clone();
+                                    ah.run_on_main_thread(move || {
+                                        if let Some(enigo_state) =
+                                            ah_clone.try_state::<EnigoState>()
+                                        {
+                                            if let Ok(mut enigo) = enigo_state.0.lock() {
+                                                if let Err(e) =
+                                                    paste_direct(&mut enigo, &remaining)
+                                                {
+                                                    error!(
+                                                        "Failed to type remaining text: {}",
+                                                        e
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    })
+                                    .unwrap_or_else(|e| {
+                                        error!(
+                                            "Failed to run remaining paste on main thread: {:?}",
+                                            e
+                                        );
+                                    });
+                                }
+                            } else {
+                                debug!("Realtime typing complete — no remaining text to type");
+                            }
                         }
                         utils::hide_recording_overlay(&ah);
                         change_tray_icon(&ah, TrayIconState::Idle);

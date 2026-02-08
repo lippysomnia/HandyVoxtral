@@ -196,6 +196,12 @@ impl VoxtralStreamingSession {
                             }
                         }
                         Some(Ok(Message::Close(_))) => {
+                            if audio_ended {
+                                // Server closed before sending transcription.done —
+                                // return what we have from accumulated deltas
+                                info!("Voxtral streaming: server closed connection after audio ended, using accumulated text");
+                                break;
+                            }
                             debug!("Voxtral streaming: WebSocket closed by server");
                             break;
                         }
@@ -204,7 +210,13 @@ impl VoxtralStreamingSession {
                             return Err(anyhow::anyhow!("Voxtral streaming: WebSocket read error: {}", e));
                         }
                         None => {
-                            debug!("Voxtral streaming: WebSocket stream ended");
+                            if audio_ended {
+                                // Stream ended after we sent end signal —
+                                // return what we have from accumulated deltas
+                                info!("Voxtral streaming: stream ended after audio ended, using accumulated text");
+                                break;
+                            }
+                            debug!("Voxtral streaming: WebSocket stream ended unexpectedly");
                             break;
                         }
                         _ => {}
